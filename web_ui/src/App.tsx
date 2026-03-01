@@ -1480,7 +1480,7 @@ export default function App() {
                                         toast.error("至少保留一个监控级别");
                                         return;
                                       }
-                                      newIntervals = { ...config.monitor_intervals };
+                                      newIntervals = { ...(config.monitor_intervals as any) };
                                       if (isSelected) {
                                         delete newIntervals[interval];
                                       } else {

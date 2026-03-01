@@ -1,0 +1,236 @@
+"""
+ 核心引擎应用层模块
+ 负责编排获取数据 -> 计算信号 -> 取只读资产 -> 风控算仓 -> 入库 -> 广播的最上层流水线。
+ 纯粹的调度器，不包含底层业务逻辑或具体的发单网络请求。
+"""
+import asyncio
+import logging
+from typing import List
+from datetime import datetime
+
+from core.interfaces import IDataFeed, IAccountReader, IRepository, INotifier
+from domain.strategy.pinbar import PinbarStrategy
+from domain.risk.sizer import PositionSizer
+from core.entities import Bar, ScoringWeights
+from core.exceptions import RiskLimitExceeded
+
+logger = logging.getLogger(__name__)
+
+class CryptoRadarEngine:
+    """
+    监控系统的主动力引擎 (The Engine)。
+    组装了数据源、探针、仓储、推送器以及核心业务大脑。
+    """
+    def __init__(
+        self,
+        feed: IDataFeed,
+        account_reader: IAccountReader,
+        repo: IRepository,
+        notifier: INotifier,
+        strategy: PinbarStrategy,
+        risk_sizer: PositionSizer,
+        active_symbols: List[str] = None,
+        interval: str = "1h"
+    ):
+        self.feed = feed
+        self.account_reader = account_reader
+        self.repo = repo
+        self.notifier = notifier
+        self.strategy = strategy
+        self.risk_sizer = risk_sizer
+        
+        self.active_symbols = active_symbols or []
+        self.monitor_intervals = ["15m", "1h", "4h"] # 会被 config.py 层面动态覆盖
+        
+        # 策略使用的历史 K 线缓存 (按级别、币种双层隔离)
+        # 结构: {"15m": {"BTCUSDT": [Bar, Bar...]}, "1h": {...}}
+        from collections import defaultdict
+        self.history_bars: Dict[str, Dict[str, List[Bar]]] = defaultdict(lambda: defaultdict(list))
+        # 用于 Dashboard 实时价格看板的最新价格缓存
+        self.latest_prices: Dict[str, float] = {}
+        
+        # 全局风控参数，后续应由 IConfigProvider 动态拉取，此处为快速启动赋默认值
+        self.risk_pct = 0.02
+        self.max_sl_dist = 0.035
+        self.max_leverage = 20.0
+        self.weights = ScoringWeights(w_shape=0.4, w_trend=0.4, w_vol=0.2)
+        from core.entities import PinbarConfig
+        self.pinbar_config = PinbarConfig()
+        self.system_enabled = True
+
+        # ================================
+        # 遥测系统指标数据 (Telemetry)
+        # ================================
+        import time
+        self.start_time = time.time()
+        self.is_connected = False
+        self.api_latency_ms = 0
+        self.api_weight_usage = 0.0
+
+    async def start(self):
+        """
+        引擎主干线：无限循环的事件驱动处理程序。
+        必须做好最外层的防御性 try-except 机制，保证 7x24 小时运行。
+        """
+        logger.info(f"🚀 CryptoRadar 引擎已启动! 正在监听 {self.active_symbols} {self.monitor_intervals} K线流...")
+        
+        # 定义多重时间框架 (MTF) 的大级别映射关系
+        mtf_mapping = {
+            "15m": "1h",
+            "1h": "4h",
+            "4h": "1d",
+            "1d": "1d" # 1d 暂时没有配置更大的周期，让其参考自身
+        }
+        
+        while True:
+            try:
+                self.is_connected = False
+                
+                # 计算出所有需要订阅的 K 线级别 (目标周期 + 如果开启了 MTF 则额外订阅的其依赖的高级周期)
+                needed_intervals = set(self.monitor_intervals.keys())
+                for ivl, config in self.monitor_intervals.items():
+                    if config.use_trend_filter and ivl in mtf_mapping:
+                        needed_intervals.add(mtf_mapping[ivl])
+                        
+                async for current_bar in self.feed.subscribe_klines(self.active_symbols, list(needed_intervals)):
+                    self.is_connected = True
+                    
+                    self.latest_prices[current_bar.symbol.upper()] = current_bar.close
+                    
+                    if not current_bar.is_closed:
+                        continue
+                        
+                    logger.debug(f"收到闭合 K 线: {current_bar.symbol} {current_bar.interval} {current_bar.timestamp} 收盘价: {current_bar.close}")
+                    
+                    if not self.system_enabled:
+                        continue
+                        
+                    sym_upper = current_bar.symbol.upper()
+                    ivl = current_bar.interval
+                    
+                    # 只有当前收盘线的周期在我们目标监控列表里，才触发策略计算。
+                    # 如果这仅仅是一根用作"支撑大级别趋势"而不在监控列表的K线，我们只追加缓存，不触发打单检查。
+                    should_evaluate = ivl in self.monitor_intervals
+                        
+                    current_history = self.history_bars[ivl][sym_upper]
+
+                    # 提取 MTF 高级别趋势 (如果当前就是 1d 或者未配置，默认 None 走原逻辑)
+                    higher_trend = None
+                    if should_evaluate and ivl in mtf_mapping and mtf_mapping[ivl] != ivl:
+                        interval_config = self.monitor_intervals.get(ivl)
+                        if interval_config and interval_config.use_trend_filter:
+                            higher_ivl = mtf_mapping[ivl]
+                            higher_history = self.history_bars[higher_ivl][sym_upper]
+                            # 计算大级别 EMA60
+                            if len(higher_history) >= 60:
+                                from domain.strategy.indicators import calculate_ema
+                                higher_closes = [b.close for b in higher_history]
+                                higher_ema60 = calculate_ema(higher_closes, 60)
+                                # 如果当前价格在大级别 EMA之上则看多
+                                higher_trend = "LONG" if current_bar.close > higher_ema60 else "SHORT"
+                            
+                    signal = None
+                    if should_evaluate:
+                        signal = self.strategy.evaluate(
+                            current_bar=current_bar,
+                            history_bars=current_history,
+                            max_sl_dist=self.max_sl_dist,
+                            weights=self.weights,
+                            higher_trend=higher_trend,
+                            pinbar_config=self.pinbar_config
+                        )
+                    
+                    # 更新履历
+                    current_history.append(current_bar)
+                    if len(current_history) > 100:
+                        current_history.pop(0)
+
+                    if not signal:
+                        continue
+                        
+                    logger.info(f"✨ 发现有效策略信号! 级别: {signal.interval} 方向: {signal.direction} 理由: {signal.reason}")
+
+                    # 2. 探针：获取真实的账户只读状态
+                    try:
+                        import time
+                        start_req = time.time()
+                        account_balance = await self.account_reader.fetch_account_balance()
+                        self.api_latency_ms = int((time.time() - start_req) * 1000)
+                        # 模拟权重消耗积累和释放的监控
+                        self.api_weight_usage = min(100.0, self.api_weight_usage + 5.0) 
+                    except Exception as e:
+                        self.api_latency_ms = 999
+                        logger.error(f"无法读取币安余额信息: {e}")
+                        continue
+                    
+                    # 3. 风控算仓大脑计算 (纯领域计算)
+                    try:
+                        sizing = self.risk_sizer.calculate(
+                            signal=signal,
+                            account=account_balance,
+                            risk_pct=self.risk_pct,
+                            max_leverage=self.max_leverage
+                        )
+                    except RiskLimitExceeded as e:
+                        logger.warning(f"🚫 信号由于硬风控被拦截丢弃: {str(e)}")
+                        continue
+                        
+                    # 4. 只读动作下沉持久化入库用于审计
+                    await self.repo.save_signal(signal)
+                    await self.repo.save_position_sizing(sizing)
+                    
+                    # 5. 组装推送到用户的 Markdown 告警富文本
+                    markdown_message = self._format_message(sizing, account_balance)
+                    
+                    # 取出全局推送总闸状态，默认开启
+                    global_push_val = await self.repo.get_secret("global_push_enabled")
+                    is_global_push = global_push_val.lower() == "true" if global_push_val else True
+                    
+                    if is_global_push:
+                        # 并发广播给多个收信端，绝对不阻塞
+                        await self.notifier.send_markdown(markdown_message)
+                    else:
+                        logger.info(f"监控到信号: #{signal.symbol.upper()} - {signal.direction}，但全局推送 (global_push_enabled) 已关闭，跳过告警。")
+
+            except Exception as e:
+                self.is_connected = False
+                logger.error(f"引擎出现全局未处理的阻断级异常: {e}，将在 10 秒后重启内部大循环。")
+                
+                # 在此触发强制断网或异常告警推送
+                try:
+                    await self.notifier.send_markdown(f"🚨 **系统发生阻断级异常**\n\n```text\n{e}\n```\n系统将于 10 秒后重试连接。")
+                except:
+                    pass
+                await asyncio.sleep(10)
+
+        # 在循环最后或者后台任务中，模拟性能消耗衰减
+        # 这里为了简化不另开 task，可放在循环空闲期，不过当前是阻塞流，由其他机制衰减亦可。
+
+    def _format_message(self, sizing, account) -> str:
+        """组装 Markdown 通知，参考 docs/push.md 模板"""
+        signal = sizing.signal
+        timestamp_str = datetime.fromtimestamp(signal.timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # 提取或推导过滤指标状态
+        direction_emoji = "🟢 LONG" if signal.direction == "LONG" else "🔴 SHORT"
+        ema_status = "Price > EMA60" if signal.direction == "LONG" else "Price < EMA60"
+        
+        # 将打分(0-100)映射到模板要求的 (0-10)
+        display_score = round(signal.score / 10, 1)
+        
+        return (
+            f"**🚨 发现新交易信号 ({signal.reason})**\n"
+            f"**交易对**: #{signal.symbol.upper()}\n"
+            f"**级别**: {signal.interval} | **方向**: {direction_emoji}\n"
+            f"**时间**: {timestamp_str}\n\n"
+            f"- 预计入场: `{signal.entry_price}`\n"
+            f"- 初始止损: `{signal.stop_loss}`\n"
+            f"- 预期 TP1: `{signal.take_profit_1}` (1.5R)\n\n"
+            f"- EMA60 状态: {ema_status}\n"
+            f"- ADX 强度: `Active`\n"
+            f"- 形态评分: `{display_score}/10`\n"
+            f"- 影线占比: `{signal.shadow_ratio}` 倍\n"
+            f"- EMA 距离: `{signal.ema_distance}%`\n"
+            f"- ATR 波动率: `{signal.volatility_atr}`\n\n"
+            f"- 只读风控 (建议杠杆 {sizing.suggested_leverage:.1f}x)\n"
+        )

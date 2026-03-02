@@ -1,4 +1,4 @@
-# 核心系统与监控中台 API 契约设计 (v3)
+# 核心系统与监控中台 API 契约设计 (v4)
 
 本文档定义了前端指挥中心 (Apple-Style SPA) 与后端风控计算引擎之间的通信契约。
 系统已重命名为 `monitor` (加密货币信号监测系统)。
@@ -166,7 +166,75 @@
 
 ---
 
-## 2.5 实时市场数据 (Market)
+## 2.5 历史信号检查 (History Scan)
+
+对指定币种、时间级别和日期区间执行历史 K 线拉取 + 策略回放。
+由于扫描为耗时操作，接口采用 **异步任务模型 (Async Task Pattern)**：提交后立即返回 `task_id`，前端通过轮询获取进度。
+
+### `POST /api/signals/history-check`
+提交一次历史信号扫描任务。
+
+**请求 Body:**
+```json
+{
+  "start_date": "2026-01-01",
+  "end_date": "2026-02-28",
+  "symbol": "BTCUSDT",
+  "interval": "1h"
+}
+```
+*字段说明:*
+- `start_date` / `end_date`: 日期字符串 (YYYY-MM-DD)，精确到日。
+- `symbol`: 单选，必须来自当前系统已配置的 `active_symbols` 列表。
+- `interval`: 单选，必须来自当前系统已配置的 `monitor_intervals` 键列表。
+
+**响应 (202 Accepted):**
+```json
+{
+  "status": "accepted",
+  "task_id": "scan-uuid-abc123",
+  "message": "历史信号扫描任务已启动"
+}
+```
+
+**后端逻辑流:**
+1. **数据采集层**: 调用币安 `GET /fapi/v1/klines` 按 `symbol` + `interval` + 日期范围拉取完整历史 K 线。
+2. **策略检测层**: 全量复用 `PinbarDetector` 形态识别逻辑。
+3. **MTF 趋势校验**: 若该 `interval` 在 `monitor_intervals` 中 `use_trend_filter == true`，则同步拉取对应高一级周期 K 线进行 EMA60 方向校验。
+4. **动态评分层**: 全量复用当前 `ScoringWeights` 权重进行打分。
+5. **持久化**: 命中信号存入数据库，`source` 字段标记为 `"history_scan"`（区别于实时监控的 `"realtime"`）。
+6. **推送通知**: 扫描完成后触发飞书/企微汇总通知。
+
+### `GET /api/signals/history-check/{task_id}`
+轮询历史扫描任务的执行状态。
+
+**响应 (200 OK) - 进行中:**
+```json
+{
+  "task_id": "scan-uuid-abc123",
+  "status": "running",
+  "progress": 65,
+  "message": "已扫描 650 / 1000 根K线"
+}
+```
+
+**响应 (200 OK) - 已完成:**
+```json
+{
+  "task_id": "scan-uuid-abc123",
+  "status": "completed",
+  "progress": 100,
+  "result": {
+    "total_bars_scanned": 1000,
+    "signals_found": 12,
+    "signals_saved": 12
+  }
+}
+```
+
+---
+
+## 2.8 实时市场数据 (Market)
 
 ### `GET /api/market/prices`
 获取当前监控币种的实时价格心跳。
@@ -180,6 +248,88 @@
   "BTCUSDT": 64050.00,
   "ETHUSDT": 3450.25,
   "SOLUSDT": 145.50
+}
+```
+
+---
+
+## 2.9 K 线图表数据聚合 (Chart Data)
+
+为前端 K 线可视化模块提供融合了 OHLCV 数据与信号标记的一站式聚合接口。
+
+### `GET /api/chart/data/{symbol}`
+获取指定交易对的历史 K 线序列及对应时间段内的信号标记点。
+
+**Path 参数:**
+* `symbol` (string): 交易对，如 `BTCUSDT`
+
+**Query 参数:**
+* `interval` (string, 必填): 时间级别，如 `15m`, `1h`, `4h`, `1d`
+* `limit` (int, 可选): 返回的 K 线根数，默认 `200`，最大 `1500`
+
+**响应 (200 OK):**
+```json
+{
+  "symbol": "BTCUSDT",
+  "interval": "1h",
+  "klines": [
+    {
+      "time": 1772323200,
+      "open": 64050.00,
+      "high": 64200.50,
+      "low": 63980.00,
+      "close": 64150.25,
+      "volume": 1234.56
+    }
+  ],
+  "markers": [
+    {
+      "time": 1772323200,
+      "position": "belowBar",
+      "color": "#22c55e",
+      "shape": "arrowUp",
+      "text": "LONG 85pts",
+      "signal": {
+        "direction": "LONG",
+        "entry_price": 64050.00,
+        "stop_loss": 63500.00,
+        "take_profit_1": 65100.00,
+        "score": 85,
+        "source": "realtime"
+      }
+    }
+  ]
+}
+```
+
+**字段说明:**
+
+| 字段 | 说明 |
+|------|------|
+| `klines[].time` | TradingView 规范的 **秒级** Unix 时间戳 (K 线开盘时间) |
+| `markers[].time` | 与 `klines[].time` 精确对齐的秒级时间戳 |
+| `markers[].position` | TradingView Marker 位置：`LONG` 信号 → `belowBar`，`SHORT` 信号 → `aboveBar` |
+| `markers[].color` | `LONG` → `#22c55e` (绿)，`SHORT` → `#ef4444` (红) |
+| `markers[].shape` | `LONG` → `arrowUp`，`SHORT` → `arrowDown` |
+| `markers[].signal.source` | `"realtime"` 或 `"history_scan"`，供前端区分标记样式 |
+
+**数据对齐规则:**
+后端在生成 `markers` 时，必须将信号的毫秒时间戳 (`signal.timestamp`) **向下取整** 到其所属 K 线级别的开盘时间戳，然后转为秒级。对齐算法：
+```
+aligned_time_sec = (signal_timestamp_ms // interval_ms) * interval_ms // 1000
+```
+此规则确保 Marker 精准落在对应的 K 线柱上，而非落在 K 线之间的空白间隙。
+
+**缓存策略:**
+- 后端应对每个 `symbol + interval` 组合维护一份内存 LRU 缓存 (最多缓存 10 组)
+- 缓存有效期设为该级别 K 线的一个周期时长 (如 `1h` → 3600秒)
+- 命中缓存时仅需增量追加最新 K 线 + 重查 markers，避免重复调用 Binance `GET /fapi/v1/klines`
+- 缓存未命中时走全量拉取路径，权重开销 = 5 (单次 klines 请求)
+
+**错误响应 (400):**
+```json
+{
+  "detail": "不支持的时间级别: 2h"
 }
 ```
 

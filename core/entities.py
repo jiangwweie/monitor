@@ -96,6 +96,7 @@ class Signal:
     shadow_ratio: float = 0.0 # 影线占比
     ema_distance: float = 0.0 # EMA 距离
     volatility_atr: float = 0.0 # ATR 波动率
+    source: str = "realtime"   # 信号来源: "realtime" (实时监控) | "history_scan" (历史回扫)
 
 @dataclass
 class PositionSizing:

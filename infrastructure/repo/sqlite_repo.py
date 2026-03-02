@@ -28,6 +28,10 @@ class SQLiteRepo(IRepository):
     async def init_db(self):
         """建库建表语句"""
         async with aiosqlite.connect(self.db_path) as db:
+            # 启用 WAL 模式：允许并发读写，防止历史扫描与实时监控写入冲突
+            await db.execute("PRAGMA journal_mode=WAL")
+            # 遇到锁时等待 5 秒而非立即报错
+            await db.execute("PRAGMA busy_timeout=5000")
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS signals (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,6 +88,10 @@ class SQLiteRepo(IRepository):
             try:
                 await db.execute("ALTER TABLE signals ADD COLUMN interval TEXT DEFAULT '1h'")
             except aiosqlite.OperationalError: pass
+
+            try:
+                await db.execute("ALTER TABLE signals ADD COLUMN source TEXT DEFAULT 'realtime'")
+            except aiosqlite.OperationalError: pass
                 
             await db.commit()
             
@@ -96,8 +104,8 @@ class SQLiteRepo(IRepository):
                 INSERT INTO signals (
                     symbol, interval, direction, entry_price, stop_loss, take_profit_1, 
                     timestamp, reason, sl_distance_pct, score, score_details, 
-                    shadow_ratio, ema_distance, volatility_atr, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    shadow_ratio, ema_distance, volatility_atr, source, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 signal.symbol,
                 signal.interval,
@@ -113,6 +121,7 @@ class SQLiteRepo(IRepository):
                 signal.shadow_ratio,
                 signal.ema_distance,
                 signal.volatility_atr,
+                signal.source,
                 int(time.time() * 1000)
             ))
             await db.commit()

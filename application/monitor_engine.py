@@ -5,8 +5,8 @@
 """
 import asyncio
 import logging
-from typing import List
-from datetime import datetime
+from typing import List, Dict
+from datetime import datetime, timedelta, timezone
 
 from core.interfaces import IDataFeed, IAccountReader, IRepository, INotifier
 from domain.strategy.pinbar import PinbarStrategy
@@ -67,11 +67,64 @@ class CryptoRadarEngine:
         self.api_latency_ms = 0
         self.api_weight_usage = 0.0
 
+    async def _warmup_history(self):
+        """
+        冷启动预热：预加载最近 100 根历史 K 线到缓冲区。
+        解决 PinbarStrategy 需要至少 60 根历史才能计算 EMA60 的冷启动问题。
+        若无此步骤，15m 级别需等待 15 小时，1h 需等待 2.5 天才能产出首个信号。
+        """
+        from infrastructure.feed.binance_kline_fetcher import BinanceKlineFetcher, INTERVAL_MS
+
+        fetcher = BinanceKlineFetcher()
+        warmup_bars = 100  # 预加载根数
+
+        # 收集所有需要订阅的级别 (含 MTF 大级别)
+        mtf_mapping = {"15m": "1h", "1h": "4h", "4h": "1d", "1d": "1d"}
+        all_intervals = set(self.monitor_intervals.keys())
+        for ivl, cfg in self.monitor_intervals.items():
+            if cfg.use_trend_filter and ivl in mtf_mapping:
+                all_intervals.add(mtf_mapping[ivl])
+
+        total_tasks = len(self.active_symbols) * len(all_intervals)
+        logger.info(f"🔥 开始冷启动预热: {len(self.active_symbols)} 个币种 × {len(all_intervals)} 个级别 = {total_tasks} 个缓冲区")
+
+        success_count = 0
+        for sym in self.active_symbols:
+            for ivl in all_intervals:
+                try:
+                    interval_ms = INTERVAL_MS.get(ivl, 3_600_000)
+                    # 往前推 warmup_bars 根 K 线的时间
+                    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+                    start_ms = now_ms - (warmup_bars * interval_ms)
+                    start_date = datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+                    end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+                    bars = await fetcher.fetch_history_klines(
+                        symbol=sym,
+                        interval=ivl,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+
+                    # 只保留最近 100 根
+                    bars = bars[-warmup_bars:]
+                    self.history_bars[ivl][sym.upper()] = bars
+                    success_count += 1
+                    logger.info(f"  ✅ {sym} {ivl} 预加载 {len(bars)} 根K线")
+
+                except Exception as e:
+                    logger.warning(f"  ⚠️ {sym} {ivl} 预加载失败 (非致命): {e}")
+
+        logger.info(f"🔥 冷启动预热完成: {success_count}/{total_tasks} 个缓冲区已就绪")
+
     async def start(self):
         """
         引擎主干线：无限循环的事件驱动处理程序。
         必须做好最外层的防御性 try-except 机制，保证 7x24 小时运行。
         """
+        # === 冷启动预热：预加载历史 K 线，消除 EMA60 需要 60 根历史的等待漏洞 ===
+        await self._warmup_history()
+
         logger.info(f"🚀 CryptoRadar 引擎已启动! 正在监听 {self.active_symbols} {self.monitor_intervals} K线流...")
         
         # 定义多重时间框架 (MTF) 的大级别映射关系
@@ -193,8 +246,9 @@ class CryptoRadarEngine:
                         logger.info(f"监控到信号: #{signal.symbol.upper()} - {signal.direction}，但全局推送 (global_push_enabled) 已关闭，跳过告警。")
 
             except Exception as e:
+                import traceback
                 self.is_connected = False
-                logger.error(f"引擎出现全局未处理的阻断级异常: {e}，将在 10 秒后重启内部大循环。")
+                logger.error(f"引擎出现全局未处理的阻断级异常: {e}，将在 10 秒后重启内部大循环。\n{traceback.format_exc()}")
                 
                 # 在此触发强制断网或异常告警推送
                 try:

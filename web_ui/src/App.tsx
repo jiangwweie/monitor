@@ -35,9 +35,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -64,10 +65,13 @@ import {
   Wallet,
   ArrowUpDown,
   Filter,
+  ScanSearch,
+  CalendarDays,
 } from "lucide-react";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
+import { SignalChartModal } from "@/components/SignalChartModal";
 
 const AVAILABLE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
 
@@ -152,6 +156,20 @@ export default function App() {
   const [selectedPositionDetail, setSelectedPositionDetail] = useState<any>(null);
   const [loadingPositionDetail, setLoadingPositionDetail] = useState(false);
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
+
+  // --- History Scan Modal States ---
+  const [isHistoryScanOpen, setIsHistoryScanOpen] = useState(false);
+  const [historyScanSubmitting, setHistoryScanSubmitting] = useState(false);
+  const [historyScanForm, setHistoryScanForm] = useState({
+    start_date: "",
+    end_date: "",
+    symbol: "",
+    interval: "",
+  });
+
+  // --- Signal Chart Detail Modal ---
+  const [chartDetailSignal, setChartDetailSignal] = useState<any>(null);
+  const [isChartDetailOpen, setIsChartDetailOpen] = useState(false);
 
   const handleOpenPositionDetail = async (symbol: string) => {
     setIsPositionModalOpen(true);
@@ -407,6 +425,38 @@ export default function App() {
       }
     } catch (error) {
       toast.error("删除信号失败", { description: "请检查网络或后端服务状态" });
+    }
+  };
+
+  // --- History Scan Handler ---
+  const handleSubmitHistoryScan = async () => {
+    const { start_date, end_date, symbol, interval } = historyScanForm;
+    if (!start_date || !end_date || !symbol || !interval) {
+      toast.error("请完整填写所有配置项");
+      return;
+    }
+    setHistoryScanSubmitting(true);
+    try {
+      const res = await fetch("http://localhost:8000/api/signals/history-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_date, end_date, symbol, interval }),
+      });
+      if (res.ok || res.status === 202) {
+        const data = await res.json();
+        setIsHistoryScanOpen(false);
+        setHistoryScanForm({ start_date: "", end_date: "", symbol: "", interval: "" });
+        toast.success("历史扫描任务已在后台启动", {
+          description: `任务ID: ${data.task_id}。识别到的信号将自动录入并通知。`,
+        });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error("提交失败", { description: errData.detail || "请检查参数与后端服务状态" });
+      }
+    } catch (error) {
+      toast.error("网络异常", { description: "无法连接后端服务" });
+    } finally {
+      setHistoryScanSubmitting(false);
     }
   };
 
@@ -1126,6 +1176,17 @@ export default function App() {
                         批量删除 ({selectedSignals.size})
                       </Button>
                     )}
+                    {/* 历史信号检查按钮 */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsHistoryScanOpen(true)}
+                      className="border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/50"
+                    >
+                      <ScanSearch className="w-4 h-4 mr-2" />
+                      历史信号检查
+                    </Button>
+
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1136,6 +1197,111 @@ export default function App() {
                       清空记录
                     </Button>
                   </div>
+
+                  {/* ===== 历史信号检查弹窗 (History Scan Modal) ===== */}
+                  <Dialog open={isHistoryScanOpen} onOpenChange={setIsHistoryScanOpen}>
+                    <DialogContent className="sm:max-w-md bg-white/80 dark:bg-zinc-900/80 backdrop-blur-2xl border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-zinc-100 rounded-3xl p-6 shadow-2xl">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <ScanSearch className="w-5 h-5 text-blue-500" />
+                          历史信号检查
+                        </DialogTitle>
+                        <DialogDescription className="text-zinc-500 dark:text-zinc-400">
+                          回溯指定日期范围内的历史K线，全量复用当前策略与评分逻辑进行信号扫描。
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-5 py-4">
+                        {/* 日期区间 */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">开始日期</Label>
+                            <div className="relative">
+                              <CalendarDays className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                              <Input
+                                type="date"
+                                value={historyScanForm.start_date}
+                                onChange={(e) => setHistoryScanForm(prev => ({ ...prev, start_date: e.target.value }))}
+                                className="pl-10 bg-zinc-50 dark:bg-black/20 border-zinc-200 dark:border-white/10 rounded-xl h-10"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">结束日期</Label>
+                            <div className="relative">
+                              <CalendarDays className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                              <Input
+                                type="date"
+                                value={historyScanForm.end_date}
+                                onChange={(e) => setHistoryScanForm(prev => ({ ...prev, end_date: e.target.value }))}
+                                className="pl-10 bg-zinc-50 dark:bg-black/20 border-zinc-200 dark:border-white/10 rounded-xl h-10"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 币种选择 */}
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">监控币种</Label>
+                          <Select
+                            value={historyScanForm.symbol}
+                            onValueChange={(v) => setHistoryScanForm(prev => ({ ...prev, symbol: v }))}
+                          >
+                            <SelectTrigger className="bg-zinc-50 dark:bg-black/20 border-zinc-200 dark:border-white/10 rounded-xl h-10">
+                              <SelectValue placeholder="选择币种" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 rounded-xl">
+                              {config.symbols.split(",").map(s => s.trim()).filter(Boolean).map((sym) => (
+                                <SelectItem key={sym} value={sym}>{sym}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* 时间级别 */}
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">时间级别</Label>
+                          <Select
+                            value={historyScanForm.interval}
+                            onValueChange={(v) => setHistoryScanForm(prev => ({ ...prev, interval: v }))}
+                          >
+                            <SelectTrigger className="bg-zinc-50 dark:bg-black/20 border-zinc-200 dark:border-white/10 rounded-xl h-10">
+                              <SelectValue placeholder="选择级别" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 rounded-xl">
+                              {(Array.isArray(config.monitor_intervals)
+                                ? config.monitor_intervals
+                                : Object.keys(config.monitor_intervals)
+                              ).map((ivl: string) => (
+                                <SelectItem key={ivl} value={ivl}>{ivl}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <DialogFooter>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setIsHistoryScanOpen(false)}
+                          className="rounded-xl"
+                        >
+                          取消
+                        </Button>
+                        <Button
+                          onClick={handleSubmitHistoryScan}
+                          disabled={historyScanSubmitting}
+                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-6"
+                        >
+                          {historyScanSubmitting ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />扫描中...</>
+                          ) : (
+                            <><ScanSearch className="w-4 h-4 mr-2" />开始检查</>
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
 
                 {/* Data Table implementation */}
@@ -1241,6 +1407,7 @@ export default function App() {
                                 <TableCell className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 pt-4">
                                   {sig.symbol}
                                   {sig.interval && <Badge variant="secondary" className="text-[10px] px-1 h-4">({sig.interval})</Badge>}
+                                  {sig.source === "history_scan" && <Badge variant="outline" className="text-[10px] px-1.5 h-4 bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20">历史</Badge>}
                                 </TableCell>
                               )}
                               {tableColumns.direction !== false && (
@@ -1284,90 +1451,17 @@ export default function App() {
                                 </TableCell>
                               )}
                               <TableCell className="text-right pr-4">
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="h-8 text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20">
-                                      详情
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="sm:max-w-sm bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-zinc-100 rounded-3xl p-6 shadow-2xl">
-                                    <DialogHeader>
-                                      <DialogTitle className="flex items-center gap-2">
-                                        <Radar className="w-5 h-5 text-blue-500" />
-                                        指标详情 ({sig.symbol})
-                                      </DialogTitle>
-                                    </DialogHeader>
-                                    <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
-                                      <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-zinc-50 dark:bg-black/20 p-3 rounded-2xl">
-                                          <p className="text-xs text-zinc-500 mb-1">综合评分 (Score)</p>
-                                          <p className="font-mono text-xl font-bold">{sig.score}</p>
-                                        </div>
-                                        <div className="bg-zinc-50 dark:bg-black/20 p-3 rounded-2xl">
-                                          <p className="text-xs text-zinc-500 mb-1">操作方向 (Direction)</p>
-                                          <p className={`font-medium ${sig.direction === "LONG" ? "text-emerald-500" : "text-rose-500"}`}>{sig.direction === "LONG" ? "做多 (LONG)" : "做空 (SHORT)"}</p>
-                                        </div>
-                                      </div>
-
-                                      <div className="space-y-3 bg-zinc-50 dark:bg-black/20 p-4 rounded-2xl">
-                                        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-2">价格与风险控制参数</p>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">建议入场价 (Entry)</span>
-                                          <span className="font-mono text-zinc-900 dark:text-zinc-100">${Number(sig.entry_price || sig.price || 0).toFixed(4)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">止损价 (Stop Loss)</span>
-                                          <span className="font-mono text-rose-500">${Number(sig.stop_loss || 0).toFixed(4)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">第一止盈价 (TP1)</span>
-                                          <span className="font-mono text-emerald-500">${Number(sig.take_profit_1 || 0).toFixed(4)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">止损距离比例 (SL Dist)</span>
-                                          <span className="font-mono text-zinc-900 dark:text-zinc-100">{(Number(sig.sl_distance_pct || 0) * 100).toFixed(2)}%</span>
-                                        </div>
-                                      </div>
-
-                                      <div className="space-y-3 bg-zinc-50 dark:bg-black/20 p-4 rounded-2xl">
-                                        <div className="flex justify-between items-center text-sm pt-2">
-                                          <span className="text-zinc-500 font-semibold text-amber-600 dark:text-amber-500">MTF 趋势校验 (MTF Trend Check)</span>
-                                          <span className="font-medium text-amber-600 dark:text-amber-500">已通过上级周期方向校验</span>
-                                        </div>
-                                        <div className="w-full h-px bg-zinc-200 dark:bg-zinc-800 my-2" />
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">信号触发原因 (Reason)</span>
-                                          <span className="font-medium text-blue-500">{sig.reason || "Pinbar+EMA60"}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">形态完美度 (Shape Score)</span>
-                                          <span className="font-mono text-zinc-900 dark:text-zinc-100">{Number(sig.score_details?.shape ?? 0).toFixed(1)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">趋势顺应度 (Trend Score)</span>
-                                          <span className="font-mono text-zinc-900 dark:text-zinc-100">{Number(sig.score_details?.trend ?? 0).toFixed(1)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">波动率健康度 (Vol Score)</span>
-                                          <span className="font-mono text-zinc-900 dark:text-zinc-100">{Number(sig.score_details?.vol ?? 0).toFixed(1)}</span>
-                                        </div>
-                                        <div className="w-full h-px bg-zinc-200 dark:bg-zinc-800 my-2" />
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">引线比例 (Shadow Ratio)</span>
-                                          <span className="font-mono text-zinc-900 dark:text-zinc-100">{Number(sig.shadow_ratio || 0).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">EMA 距离 (EMA Dist)</span>
-                                          <span className="font-mono text-zinc-900 dark:text-zinc-100">{Number(sig.ema_distance || 0).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                          <span className="text-zinc-500">真实波动幅度 (ATR)</span>
-                                          <span className="font-mono text-zinc-900 dark:text-zinc-100">{Number(sig.volatility_atr || 0).toFixed(2)}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20"
+                                  onClick={() => {
+                                    setChartDetailSignal(sig);
+                                    setIsChartDetailOpen(true);
+                                  }}
+                                >
+                                  详情
+                                </Button>
                                 <Button variant="ghost" size="icon" onClick={() => handleDeleteSignals([sigId])} className="h-8 w-8 text-rose-500/70 hover:text-rose-500 hover:bg-rose-500/10 ml-2">
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -1380,6 +1474,13 @@ export default function App() {
                   </Table>
                 </div>
               </Card>
+
+              {/* Signal Chart Detail Modal (rendered once, outside table loop) */}
+              <SignalChartModal
+                signal={chartDetailSignal}
+                open={isChartDetailOpen}
+                onOpenChange={setIsChartDetailOpen}
+              />
             </TabsContent>
 
             {/* ==================== SETTINGS TAB ==================== */}

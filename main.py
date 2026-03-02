@@ -113,8 +113,7 @@ async def lifespan(fastapi_app: FastAPI):
             saved_symbols = json.loads(saved_symbols_json)
             if isinstance(saved_symbols, list) and len(saved_symbols) > 0:
                 engine.active_symbols = saved_symbols
-                # 重新初始化缓存字典
-                engine.history_bars = {s.upper(): [] for s in engine.active_symbols}
+                # history_bars 已在 __init__ 中用 defaultdict 初始化，无需重建
         except Exception as e:
             logging.error(f"无法解析数据中的 active_symbols 配置: {e}")
 
@@ -163,6 +162,26 @@ async def lifespan(fastapi_app: FastAPI):
             engine.pinbar_config = PinbarConfig(**pinbar_data)
         except Exception as e:
             logging.error(f"无法解析数据中的 pinbar_config 配置: {e}")
+
+    # 实例化历史 K 线分片采集器与历史信号扫描引擎
+    from infrastructure.feed.binance_kline_fetcher import BinanceKlineFetcher
+    from application.history_scanner import HistoryScanner
+
+    kline_fetcher = BinanceKlineFetcher()
+    history_scanner = HistoryScanner(
+        strategy=engine.strategy,
+        repo=engine.repo,
+        notifier=engine.notifier,
+        kline_fetcher=kline_fetcher,
+        engine=engine,
+    )
+    fastapi_app.state.history_scanner = history_scanner
+
+    # 实例化 K 线图表数据聚合服务
+    from application.chart_service import ChartService
+
+    chart_service = ChartService(kline_fetcher=kline_fetcher, db_path="radar.db")
+    fastapi_app.state.chart_service = chart_service
 
     # 不阻塞地在后台事件循环中拉起监察大循环
     engine_task = asyncio.create_task(engine.start())

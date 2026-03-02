@@ -203,7 +203,94 @@ async def delete_signals(request: Request, req: DeleteSignalsReq):
 
 
 # ==========================================
-# 2.5 实时市场数据 (Market)
+# 2.5 历史信号检查 (History Scan)
+# ==========================================
+class HistoryCheckReq(BaseModel):
+    start_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    symbol: str
+    interval: str
+
+
+@app.post("/api/signals/history-check", status_code=202)
+async def submit_history_check(request: Request, req: HistoryCheckReq = Body(...)):
+    """
+    提交一次历史信号扫描任务 (异步任务模型)。
+    接口立即返回 task_id，前端通过轮询获取进度。
+    """
+    engine = request.app.state.engine
+    scanner = getattr(request.app.state, "history_scanner", None)
+
+    if not scanner:
+        raise HTTPException(status_code=503, detail="历史扫描服务未初始化")
+
+    # 校验 symbol 必须在当前已激活的币种列表中
+    if req.symbol not in engine.active_symbols:
+        raise HTTPException(
+            status_code=400,
+            detail=f"币种 {req.symbol} 不在当前激活列表中。可用: {engine.active_symbols}"
+        )
+
+    # 校验 interval 必须在当前监控周期键列表中
+    if req.interval not in engine.monitor_intervals:
+        raise HTTPException(
+            status_code=400,
+            detail=f"周期 {req.interval} 不在当前监控配置中。可用: {list(engine.monitor_intervals.keys())}"
+        )
+
+    # 校验日期合法性
+    try:
+        from datetime import datetime as dt
+        start_dt = dt.strptime(req.start_date, "%Y-%m-%d")
+        end_dt = dt.strptime(req.end_date, "%Y-%m-%d")
+        if start_dt >= end_dt:
+            raise HTTPException(status_code=400, detail="start_date 必须早于 end_date")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
+
+    task_id = scanner.submit_task(
+        symbol=req.symbol,
+        interval=req.interval,
+        start_date=req.start_date,
+        end_date=req.end_date,
+    )
+
+    return {
+        "status": "accepted",
+        "task_id": task_id,
+        "message": "历史信号扫描任务已启动"
+    }
+
+
+@app.get("/api/signals/history-check/{task_id}")
+async def get_history_check_status(request: Request, task_id: str):
+    """
+    轮询历史扫描任务的执行状态。
+    """
+    scanner = getattr(request.app.state, "history_scanner", None)
+
+    if not scanner:
+        raise HTTPException(status_code=503, detail="历史扫描服务未初始化")
+
+    task = scanner.get_task_status(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"任务 {task_id} 不存在")
+
+    response = {
+        "task_id": task.task_id,
+        "status": task.status,
+        "progress": task.progress,
+        "message": task.message,
+    }
+
+    if task.result is not None:
+        response["result"] = task.result
+
+    return response
+
+
+# ==========================================
+# 2.8 实时市场数据 (Market)
 # ==========================================
 @app.get("/api/market/prices")
 async def get_market_prices(request: Request):
@@ -212,6 +299,32 @@ async def get_market_prices(request: Request):
     出于性能及零占用 Binance 权重的考量，直接从引擎在内存中维护的最新价格字典读取。
     """
     return request.app.state.engine.latest_prices
+
+
+# ==========================================
+# 2.9 K 线图表数据聚合 (Chart Data)
+# ==========================================
+@app.get("/api/chart/data/{symbol}")
+async def get_chart_data(request: Request, symbol: str, interval: str = "1h", limit: int = 200):
+    """
+    获取指定交易对的 K 线 + 信号标记聚合数据 (TradingView 兼容格式)。
+    内置 LRU 缓存，同一 symbol+interval 在一个 K 线周期内复用缓存。
+    """
+    chart_service = getattr(request.app.state, "chart_service", None)
+    if not chart_service:
+        raise HTTPException(status_code=503, detail="图表服务未初始化")
+
+    try:
+        data = await chart_service.get_chart_data(
+            symbol=symbol,
+            interval=interval,
+            limit=limit,
+        )
+        return data
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"图表数据获取失败: {str(e)}")
 
 
 # ==========================================

@@ -13,6 +13,14 @@ class PinbarConfig:
     body_max_ratio: float = 0.25           # 实体最大比例 (实体/全长)
     shadow_min_ratio: float = 2.5          # 影线最小比例 (影线/实体)
     volatility_atr_multiplier: float = 1.2 # 波幅 ATR 乘数过滤
+    doji_threshold: float = 0.05           # 十字星阈值 (实体/全长 < 5% 视为十字星)
+    doji_shadow_bonus: float = 0.6         # 十字星影线比例放宽系数 (2.5 * 0.6 = 1.5)
+    mtf_trend_filter_mode: str = "soft"    # MTF 趋势过滤模式："soft"(降分) | "hard"(直接拒绝)
+    dynamic_sl_enabled: bool = True        # 是否启用动态止损阈值
+    dynamic_sl_base: float = 0.035         # 动态止损基准值 (3.5%)
+    dynamic_sl_atr_multiplier: float = 0.5 # ATR 对止损的贡献系数
+    atr_volatility_lookback: int = 20      # ATR 波动率回溯周期
+    shape_divergence_penalty: int = 20     # 形态-趋势背离扣分 (形态方向与EMA趋势方向相反时)
 
 @dataclass
 class Bar:
@@ -97,6 +105,8 @@ class Signal:
     ema_distance: float = 0.0 # EMA 距离
     volatility_atr: float = 0.0 # ATR 波动率
     source: str = "realtime"   # 信号来源: "realtime" (实时监控) | "history_scan" (历史回扫)
+    is_contrarian: bool = False # 是否为逆势信号 (MTF soft 模式下)
+    is_shape_divergent: bool = False # 是否为形态与趋势背离信号
 
 @dataclass
 class PositionSizing:

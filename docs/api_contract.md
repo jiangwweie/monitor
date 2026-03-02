@@ -437,7 +437,8 @@ aligned_time_sec = (signal_timestamp_ms // interval_ms) * interval_ms // 1000
     "entry_price": true,
     "shadow_ratio": false,
     "ema_distance": false,
-    "volatility_atr": false
+    "volatility_atr": false,
+    "is_contrarian": false
   }
 }
 ```
@@ -448,3 +449,122 @@ aligned_time_sec = (signal_timestamp_ms // interval_ms) * interval_ms // 1000
   "status": "success"
 }
 ```
+
+---
+
+## 附录 A: PinbarConfig 配置字段说明
+
+### A.1 形态识别参数
+
+| 字段 | 类型 | 默认值 | 范围 | 说明 |
+|------|------|--------|------|------|
+| `body_max_ratio` | float | 0.25 | 0.05-0.8 | 实体最大比例 (实体/全长) |
+| `shadow_min_ratio` | float | 2.5 | 1.0-10.0 | 影线最小比例 (影线/实体) |
+| `volatility_atr_multiplier` | float | 1.2 | 0.5-5.0 | 波幅 ATR 乘数过滤 |
+
+### A.2 十字星优化参数 (新增)
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `doji_threshold` | float | 0.05 | 十字星阈值 (实体/全长 < 5% 视为十字星) |
+| `doji_shadow_bonus` | float | 0.6 | 十字星影线比例放宽系数 (2.5 × 0.6 = 1.5) |
+
+**使用说明：**
+当 K 线的 `body_ratio = body_length / total_length < doji_threshold` 时，系统视为十字星形态，
+影线比例要求从 `shadow_min_ratio` 放宽至 `shadow_min_ratio × doji_shadow_bonus`。
+
+### A.3 MTF 趋势过滤参数 (新增)
+
+| 字段 | 类型 | 默认值 | 可选值 | 说明 |
+|------|------|--------|--------|------|
+| `mtf_trend_filter_mode` | string | "soft" | "soft", "hard" | 趋势过滤模式 |
+
+**模式说明：**
+- `"soft"` (推荐): 允许逆势信号，但评分时扣除 15 分
+- `"hard"`: 逆势信号直接拒绝 (旧版逻辑)
+
+### A.4 动态止损参数 (新增)
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `dynamic_sl_enabled` | bool | true | 是否启用动态止损阈值 |
+| `dynamic_sl_base` | float | 0.035 | 动态止损基准值 (3.5%) |
+| `dynamic_sl_atr_multiplier` | float | 0.5 | ATR 对止损的贡献系数 |
+
+**计算公式：**
+```
+effective_max_sl_dist = dynamic_sl_base + (atr14 / entry_price) × dynamic_sl_atr_multiplier
+上限 = max_sl_dist × 1.5
+```
+
+**行为说明：**
+- 高波动市场：ATR 上升，止损阈值自动放宽，避免优质信号被过滤
+- 低波动市场：ATR 下降，止损阈值收紧，保持风控严格性
+
+---
+
+## 附录 B: Signal 信号字段说明
+
+### B.1 基础字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `symbol` | string | 交易对，如 `BTCUSDT` |
+| `interval` | string | 时间级别，如 `15m`, `1h`, `4h`, `1d` |
+| `direction` | string | "LONG" (做多) 或 "SHORT" (做空) |
+| `entry_price` | float | 建议入场价格 |
+| `stop_loss` | float | 绝对止损价格 |
+| `take_profit_1` | float | 第一止盈价格 (1.5R 盈亏比) |
+| `timestamp` | int | 信号触发时间戳 (毫秒) |
+| `reason` | string | 信号触发原因，如 `Pinbar+EMA60` |
+| `sl_distance_pct` | float | 止损距离百分比 |
+
+### B.2 评分字段
+
+| 字段 | 类型 | 范围 | 说明 |
+|------|------|------|------|
+| `score` | int | 0-100 | 系统加权综合得分 |
+| `score_details.shape` | float | 0-100 | 形态完美度得分 |
+| `score_details.trend` | float | 0-100 | 趋势顺应度得分 |
+| `score_details.vol` | float | 0-100 | 波动爆发得分 |
+
+### B.3 分析指标
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `shadow_ratio` | float | 影线占比 (主方向影线 / 实体) |
+| `ema_distance` | float | 价格与 EMA60 的偏离比率 (%) |
+| `volatility_atr` | float | 当前 K 线总波幅 / ATR(14) 倍数 |
+
+### B.4 新增字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `source` | string | 信号来源：`"realtime"` (实时监控) 或 `"history_scan"` (历史回扫) |
+| `is_contrarian` | bool | 是否为逆势信号 (仅在 `mtf_trend_filter_mode="soft"` 模式下可能为 true) |
+
+**`is_contrarian` 字段说明：**
+- `false`: 顺大势信号，价格方向与 MTF 高级别趋势一致
+- `true`: 逆大势信号，评分已扣除 15 分，前端可考虑用特殊样式标记
+
+---
+
+## 附录 C: 错误响应规范
+
+### C.1 标准错误格式
+
+```json
+{
+  "detail": "错误描述信息"
+}
+```
+
+### C.2 常见错误码
+
+| HTTP 状态码 | 场景 |
+|-------------|------|
+| 400 | 请求参数非法 (如日期格式错误、权重和不等于 1.0) |
+| 401 / 403 | 币安 API Key 无效或权限不足 |
+| 404 | 资源不存在 (如任务 ID 不存在) |
+| 500 | 服务器内部错误 |
+| 503 | 服务不可用 (如历史扫描服务未初始化) |

@@ -92,7 +92,11 @@ class SQLiteRepo(IRepository):
             try:
                 await db.execute("ALTER TABLE signals ADD COLUMN source TEXT DEFAULT 'realtime'")
             except aiosqlite.OperationalError: pass
-                
+
+            try:
+                await db.execute("ALTER TABLE signals ADD COLUMN is_shape_divergent BOOLEAN DEFAULT 0")
+            except aiosqlite.OperationalError: pass
+
             await db.commit()
             
     # ======== IRepository 实现 ========
@@ -102,10 +106,10 @@ class SQLiteRepo(IRepository):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute('''
                 INSERT INTO signals (
-                    symbol, interval, direction, entry_price, stop_loss, take_profit_1, 
-                    timestamp, reason, sl_distance_pct, score, score_details, 
-                    shadow_ratio, ema_distance, volatility_atr, source, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    symbol, interval, direction, entry_price, stop_loss, take_profit_1,
+                    timestamp, reason, sl_distance_pct, score, score_details,
+                    shadow_ratio, ema_distance, volatility_atr, source, is_shape_divergent, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 signal.symbol,
                 signal.interval,
@@ -122,6 +126,7 @@ class SQLiteRepo(IRepository):
                 signal.ema_distance,
                 signal.volatility_atr,
                 signal.source,
+                signal.is_shape_divergent,
                 int(time.time() * 1000)
             ))
             await db.commit()

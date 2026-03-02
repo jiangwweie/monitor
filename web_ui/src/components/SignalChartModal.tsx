@@ -313,7 +313,13 @@ export function SignalChartModal({ signal, open, onOpenChange }: SignalChartModa
                     <div className="space-y-3 bg-zinc-50 dark:bg-black/20 p-4 rounded-2xl">
                         <div className="flex justify-between items-center text-sm pt-2">
                             <span className="text-zinc-500 font-semibold text-amber-600 dark:text-amber-500">MTF 趋势校验</span>
-                            <span className="font-medium text-amber-600 dark:text-amber-500">已通过上级周期方向校验</span>
+                            {signal.is_contrarian ? (
+                                <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs">
+                                    逆势信号 (已扣 15 分)
+                                </Badge>
+                            ) : (
+                                <span className="font-medium text-emerald-600 dark:text-emerald-500">顺大势</span>
+                            )}
                         </div>
                         <div className="w-full h-px bg-zinc-200 dark:bg-zinc-800 my-2" />
                         <div className="flex justify-between items-center text-sm">

@@ -366,6 +366,12 @@ class PinbarConfigReq(BaseModel):
     body_max_ratio: float = Field(0.25, ge=0.05, le=0.8)
     shadow_min_ratio: float = Field(2.5, ge=1.0, le=10.0)
     volatility_atr_multiplier: float = Field(1.2, ge=0.5, le=5.0)
+    doji_threshold: float = Field(0.05, ge=0.01, le=0.2)
+    doji_shadow_bonus: float = Field(0.6, ge=0.1, le=1.0)
+    mtf_trend_filter_mode: str = Field("soft", pattern="^(soft|hard)$")
+    dynamic_sl_enabled: bool = True
+    dynamic_sl_base: float = Field(0.035, ge=0.01, le=0.1)
+    dynamic_sl_atr_multiplier: float = Field(0.5, ge=0.0, le=2.0)
 
 
 class ConfigUpdateReq(BaseModel):
@@ -465,6 +471,12 @@ async def update_config(request: Request, req: ConfigUpdateReq = Body(...)):
             body_max_ratio=req.pinbar_config.body_max_ratio,
             shadow_min_ratio=req.pinbar_config.shadow_min_ratio,
             volatility_atr_multiplier=req.pinbar_config.volatility_atr_multiplier,
+            doji_threshold=req.pinbar_config.doji_threshold,
+            doji_shadow_bonus=req.pinbar_config.doji_shadow_bonus,
+            mtf_trend_filter_mode=req.pinbar_config.mtf_trend_filter_mode,
+            dynamic_sl_enabled=req.pinbar_config.dynamic_sl_enabled,
+            dynamic_sl_base=req.pinbar_config.dynamic_sl_base,
+            dynamic_sl_atr_multiplier=req.pinbar_config.dynamic_sl_atr_multiplier,
         )
         await repo.set_secret(
             "pinbar_config", json.dumps(dataclasses.asdict(engine.pinbar_config))

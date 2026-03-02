@@ -9,8 +9,8 @@ services:
       - /Users/jiangwei/Documents/docker/monitor/radar.db:/app/radar.db
       - /Users/jiangwei/Documents/docker/monitor/.env:/app/.env
       - /Users/jiangwei/Documents/docker/monitor/logs:/app/logs
-    env_file:
-      - .env
+    environment:
+      - TZ=Asia/Shanghai
     restart: unless-stopped
 
   frontend:

@@ -56,8 +56,20 @@ export function SignalChartModal({ signal, open, onOpenChange }: SignalChartModa
             const interval = signal.interval || "1h";
             const symbol = signal.symbol || "BTCUSDT";
 
+            // 计算以信号为中心的时间窗口：前后各 100 根 K 线
+            const intervalMs: Record<string, number> = {
+                "1m": 60000, "5m": 300000, "15m": 900000, "30m": 1800000,
+                "1h": 3600000, "4h": 14400000, "1d": 86400000,
+            };
+            const ivlMs = intervalMs[interval] || 3600000;
+            const barsOnEachSide = 100;
+
+            // end_time = 信号时间 + 100 根 K 线，这样 limit=200 时可以覆盖 [信号时间 -100 根，信号时间 +100 根]
+            const endTime = signal.timestamp + (barsOnEachSide * ivlMs);
+            const limit = barsOnEachSide * 2;
+
             const res = await fetch(
-                `http://localhost:8000/api/chart/data/${symbol}?interval=${interval}&limit=500`
+                `http://localhost:8000/api/chart/data/${symbol}?interval=${interval}&limit=${limit}&end_time=${endTime}`
             );
 
             if (!res.ok) {
@@ -65,8 +77,14 @@ export function SignalChartModal({ signal, open, onOpenChange }: SignalChartModa
             }
 
             const data = await res.json();
-            const klines = data.klines || [];
-            const markers = data.markers || [];
+            let klines = data.klines || [];
+            let markers = data.markers || [];
+
+            // 只显示当前选中的信号标记
+            markers = markers.filter((m: any) => {
+                const timeDiff = Math.abs(signal.timestamp - m.time * 1000);
+                return timeDiff < ivlMs;
+            });
 
             if (klines.length === 0) {
                 setChartError("无可用 K 线数据");
@@ -169,11 +187,6 @@ export function SignalChartModal({ signal, open, onOpenChange }: SignalChartModa
 
             // 自适应缩放 — 聚焦到信号所在的时间区域
             const signalTimeSec = Math.floor(signal.timestamp / 1000);
-            const intervalMs: Record<string, number> = {
-                "1m": 60000, "5m": 300000, "15m": 900000, "30m": 1800000,
-                "1h": 3600000, "4h": 14400000, "1d": 86400000,
-            };
-            const ivlMs = intervalMs[interval] || 3600000;
             const barsToShow = 80;
             const rangeFrom = signalTimeSec - (barsToShow * ivlMs) / 1000;
             const rangeTo = signalTimeSec + (20 * ivlMs) / 1000;

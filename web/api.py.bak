@@ -4,7 +4,7 @@ Web API 模块
 """
 
 import time
-from typing import Optional, List, Dict, Literal, Any
+from typing import Optional, List, Dict, Literal
 from fastapi import FastAPI, Request, Query, Body, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,30 +19,8 @@ from core.entities import SignalFilter, ScoringWeights, PinbarConfig, IntervalCo
 from domain.strategy.scoring_config import ScoringConfig
 from domain.strategy.scoring_factory import ScoringStrategyFactory
 from infrastructure.reader.binance_api import BinanceAccountReader
-from domain.services import ConfigService, AccountService, SignalService
 
 logger = logging.getLogger(__name__)
-
-
-def _create_response(data: Any, status: str = "success", message: Optional[str] = None) -> Dict[str, Any]:
-    """
-    创建标准响应格式
-
-    :param data: 响应数据
-    :param status: 响应状态，默认 "success"
-    :param message: 可选的消息
-    :return: 标准响应字典
-    """
-    result = {
-        "status": status,
-        "data": data,
-        "meta": {
-            "timestamp": int(time.time() * 1000)
-        }
-    }
-    if message:
-        result["meta"]["message"] = message
-    return result
 
 # 初始化 FastAPI 实例
 app = FastAPI(title="CryptoRadar API", description="系统动态配置中心及监控面板")
@@ -81,13 +59,12 @@ async def get_system_status(request: Request):
     hours = (uptime_seconds % 86400) // 3600
     minutes = (uptime_seconds % 3600) // 60
 
-    data = {
+    return {
         "is_connected": getattr(engine, "is_connected", False),
         "api_latency_ms": getattr(engine, "api_latency_ms", 0),
         "api_weight_usage": getattr(engine, "api_weight_usage", 0.0),
         "uptime": f"{days}d {hours}h {minutes}m",
     }
-    return _create_response(data)
 
 
 # ==========================================
@@ -173,99 +150,6 @@ async def get_position_detail(request: Request, symbol: str):
 
 
 # ==========================================
-# 1.6 账户余额与持仓 (新服务层接口)
-# ==========================================
-@app.get("/api/account/balance")
-async def get_account_balance(request: Request):
-    """
-    获取账户余额信息
-    返回钱包余额、可用余额、未实现盈亏等
-    """
-    repo = request.app.state.repo
-    engine = request.app.state.engine
-
-    # 检查 API 密钥是否配置
-    api_key = await repo.get_secret("binance_api_key")
-    api_secret = await repo.get_secret("binance_api_secret")
-
-    if not api_key or not api_secret:
-        raise HTTPException(
-            status_code=400,
-            detail="Binance API keys are not configured. Please set them in Settings.",
-        )
-
-    # 使用服务层获取数据
-    account_reader = BinanceAccountReader(api_key=api_key, api_secret=api_secret)
-    account_service = AccountService(account_reader)
-
-    try:
-        data = await account_service.get_balance()
-        return _create_response(data)
-    except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. ({raw_msg})",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch account data from Binance: {e.response.text}",
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/account/positions")
-async def get_account_positions(request: Request):
-    """
-    获取账户持仓列表
-    返回当前所有持仓的详细信息
-    """
-    repo = request.app.state.repo
-    engine = request.app.state.engine
-
-    # 检查 API 密钥是否配置
-    api_key = await repo.get_secret("binance_api_key")
-    api_secret = await repo.get_secret("binance_api_secret")
-
-    if not api_key or not api_secret:
-        raise HTTPException(
-            status_code=400,
-            detail="Binance API keys are not configured. Please set them in Settings.",
-        )
-
-    # 使用服务层获取数据
-    account_reader = BinanceAccountReader(api_key=api_key, api_secret=api_secret)
-    account_service = AccountService(account_reader)
-
-    try:
-        data = await account_service.get_positions()
-        return _create_response(data)
-    except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. ({raw_msg})",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch account data from Binance: {e.response.text}",
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==========================================
 # 2. 信号展示与清理
 # ==========================================
 @app.get("/api/signals")
@@ -277,59 +161,31 @@ async def get_signals(
     start_time: Optional[int] = None,
     end_time: Optional[int] = None,
     min_score: Optional[int] = None,
-    max_score: Optional[int] = None,
-    source: Optional[str] = None,
     sort_by: str = Query("timestamp", regex="^(timestamp|score)$"),
     order: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    size: int = Query(50, ge=1, le=200),
 ):
-    """
-    分页、多维度历史信号检索接口
-
-    支持以下过滤参数:
-    - symbols: 交易对列表，逗号分隔，如 "BTCUSDT,ETHUSDT"
-    - intervals: 时间周期列表，逗号分隔，如 "15m,1h"
-    - directions: 方向列表，逗号分隔，如 "LONG,SHORT"
-    - start_time: 开始时间戳 (毫秒)
-    - end_time: 结束时间戳 (毫秒)
-    - min_score: 最低分数
-    - max_score: 最高分数
-    - source: 信号来源 "realtime" 或 "history_scan"
-    - sort_by: 排序字段 "timestamp" 或 "score"
-    - order: 排序方向 "asc" 或 "desc"
-    - page: 页码，从 1 开始
-    - page_size: 每页数量，最大 200
-    """
+    """分页、多维度历史信号检索接口"""
     repo = request.app.state.repo
 
-    # 使用服务层获取数据
-    signal_service = SignalService(repo)
-
-    # 解析逗号分隔的参数
     symbol_list = symbols.split(",") if symbols else None
     interval_list = intervals.split(",") if intervals else None
     direction_list = directions.split(",") if directions else None
 
-    try:
-        data = await signal_service.get_signals(
-            symbols=symbol_list,
-            intervals=interval_list,
-            directions=direction_list,
-            start_time=start_time,
-            end_time=end_time,
-            min_score=min_score,
-            max_score=max_score,
-            source=source,
-            sort_by=sort_by,
-            order=order,
-            page=page,
-            page_size=page_size,
-        )
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"信号查询失败：{e}")
-        raise HTTPException(status_code=500, detail=f"信号查询失败：{str(e)}")
+    filter_params = SignalFilter(
+        symbols=symbol_list,
+        intervals=interval_list,
+        directions=direction_list,
+        start_time=start_time,
+        end_time=end_time,
+        min_score=min_score,
+        sort_by=sort_by,
+        order=order,
+    )
+
+    total, items = await repo.get_signals(filter_params, page, size)
+    return {"total": total, "items": items}
 
 
 class DeleteSignalsReq(BaseModel):
@@ -451,18 +307,10 @@ async def get_market_prices(request: Request):
 # 2.9 K 线图表数据聚合 (Chart Data)
 # ==========================================
 @app.get("/api/chart/data/{symbol}")
-async def get_chart_data(
-    request: Request,
-    symbol: str,
-    interval: str = "1h",
-    limit: int = 200,
-    end_time: Optional[int] = None,
-):
+async def get_chart_data(request: Request, symbol: str, interval: str = "1h", limit: int = 200):
     """
     获取指定交易对的 K 线 + 信号标记聚合数据 (TradingView 兼容格式)。
     内置 LRU 缓存，同一 symbol+interval 在一个 K 线周期内复用缓存。
-
-    :param end_time: K 线结束时间戳 (毫秒)，默认当前时间（用于历史信号图表）
     """
     chart_service = getattr(request.app.state, "chart_service", None)
     if not chart_service:
@@ -473,7 +321,6 @@ async def get_chart_data(
             symbol=symbol,
             interval=interval,
             limit=limit,
-            end_time=end_time,
         )
         return data
     except ValueError as e:
@@ -817,139 +664,93 @@ async def update_preferences_view(request: Request, body: dict = Body(...)):
 
 
 # ==========================================
-# 4.5 配置管理子接口 (Config Sub-APIs)
+# 5. 打分配置管理 (Scoring Config)
 # ==========================================
-@app.get("/api/config/system")
-async def get_system_config(request: Request):
-    """
-    获取系统配置
-    返回系统启用状态、活跃币种、监控周期等基础配置
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        data = await config_service.get_system_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"系统配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"系统配置获取失败：{str(e)}")
-
-
-@app.get("/api/config/symbols")
-async def get_symbols_config(request: Request):
-    """
-    获取币种配置
-    返回当前监控的交易对列表
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        data = await config_service.get_symbols_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"币种配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"币种配置获取失败：{str(e)}")
-
-
-@app.get("/api/config/monitor")
-async def get_monitor_config(request: Request):
-    """
-    获取监控周期配置
-    返回各时间周期的监控设置
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        data = await config_service.get_monitor_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"监控配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"监控配置获取失败：{str(e)}")
-
-
-@app.get("/api/config/risk")
-async def get_risk_config(request: Request):
-    """
-    获取风控配置
-    返回风险百分比、最大止损距离、最大杠杆等配置
-    """
-    repo = request.app.state.repo
-    engine = request.app.state.engine
-    config_service = ConfigService(repo)
-
-    try:
-        from core.entities import RiskConfig as RiskConfigEntity
-        data = await config_service.get_risk_config(engine.risk_config if hasattr(engine, 'risk_config') else None)
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"风控配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"风控配置获取失败：{str(e)}")
-
-
-class RiskConfigReq(BaseModel):
-    """风控配置更新请求体"""
-    risk_pct: Optional[float] = Field(None, ge=0.005, le=0.1)
-    max_sl_dist: Optional[float] = Field(None, ge=0.01, le=0.1)
-    max_leverage: Optional[float] = Field(None, ge=1.0, le=125.0)
-
-
-@app.put("/api/config/risk")
-async def update_risk_config(request: Request, req: RiskConfigReq):
-    """
-    更新风控配置
-    支持热更新风险百分比、最大止损距离、最大杠杆等参数
-    """
-    repo = request.app.state.repo
-    engine = request.app.state.engine
-    config_service = ConfigService(repo)
-
-    update_data = req.model_dump(exclude_unset=True)
-
-    # 更新引擎内存中的配置
-    if "risk_pct" in update_data:
-        engine.risk_pct = update_data["risk_pct"]
-    if "max_sl_dist" in update_data:
-        engine.max_sl_dist = update_data["max_sl_dist"]
-    if "max_leverage" in update_data:
-        engine.max_leverage = update_data["max_leverage"]
-
-    try:
-        data = await config_service.update_risk_config(update_data)
-        return _create_response(data, message="风控配置已热更新")
-    except Exception as e:
-        logger.error(f"风控配置更新失败：{e}")
-        raise HTTPException(status_code=500, detail=f"风控配置更新失败：{str(e)}")
-
-
 @app.get("/api/config/scoring")
-async def get_scoring_config_new(request: Request):
+async def get_scoring_config(request: Request):
     """
     获取打分配置
-    返回打分模式、参数和权重配置
+
+    返回当前系统使用的打分配置，包括模式、各模式参数和权重配置。
+    配置从 SQLite 数据库加载，如果数据库中没有配置则返回默认值。
     """
     repo = request.app.state.repo
-    config_service = ConfigService(repo)
 
-    try:
-        data = await config_service.get_scoring_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"打分配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"打分配置获取失败：{str(e)}")
+    # 尝试从数据库加载配置
+    config_json = await repo.get_secret("scoring_config")
+
+    if config_json:
+        try:
+            config_data = json.loads(config_json)
+            # 返回完整的配置对象
+            return {
+                "mode": config_data.get("mode", "classic"),
+                "classic_shadow_min": config_data.get("classic_shadow_min", 0.6),
+                "classic_shadow_max": config_data.get("classic_shadow_max", 0.9),
+                "classic_body_good": config_data.get("classic_body_good", 0.1),
+                "classic_body_bad": config_data.get("classic_body_bad", 0.5),
+                "classic_vol_min": config_data.get("classic_vol_min", 1.2),
+                "classic_vol_max": config_data.get("classic_vol_max", 3.0),
+                "classic_trend_max_dist": config_data.get("classic_trend_max_dist", 0.03),
+                "progressive_base_cap": config_data.get("progressive_base_cap", 30.0),
+                "progressive_shadow_threshold": config_data.get("progressive_shadow_threshold", 0.6),
+                "progressive_shadow_bonus_rate": config_data.get("progressive_shadow_bonus_rate", 20.0),
+                "progressive_body_bonus_threshold": config_data.get("progressive_body_bonus_threshold", 0.1),
+                "progressive_body_bonus_rate": config_data.get("progressive_body_bonus_rate", 100.0),
+                "progressive_doji_bonus": config_data.get("progressive_doji_bonus", 5.0),
+                "progressive_vol_threshold": config_data.get("progressive_vol_threshold", 2.0),
+                "progressive_vol_bonus_rate": config_data.get("progressive_vol_bonus_rate", 15.0),
+                "progressive_extreme_vol_threshold": config_data.get("progressive_extreme_vol_threshold", 3.0),
+                "progressive_extreme_vol_bonus": config_data.get("progressive_extreme_vol_bonus", 10.0),
+                "progressive_penetration_rate": config_data.get("progressive_penetration_rate", 30.0),
+                "w_shape": config_data.get("w_shape", 0.4),
+                "w_trend": config_data.get("w_trend", 0.3),
+                "w_vol": config_data.get("w_vol", 0.3),
+            }
+        except json.JSONDecodeError:
+            logger.warning("打分配置 JSON 解析失败，使用默认配置")
+
+    # 返回默认配置
+    return {
+        "mode": "classic",
+        "classic_shadow_min": 0.6,
+        "classic_shadow_max": 0.9,
+        "classic_body_good": 0.1,
+        "classic_body_bad": 0.5,
+        "classic_vol_min": 1.2,
+        "classic_vol_max": 3.0,
+        "classic_trend_max_dist": 0.03,
+        "progressive_base_cap": 30.0,
+        "progressive_shadow_threshold": 0.6,
+        "progressive_shadow_bonus_rate": 20.0,
+        "progressive_body_bonus_threshold": 0.1,
+        "progressive_body_bonus_rate": 100.0,
+        "progressive_doji_bonus": 5.0,
+        "progressive_vol_threshold": 2.0,
+        "progressive_vol_bonus_rate": 15.0,
+        "progressive_extreme_vol_threshold": 3.0,
+        "progressive_extreme_vol_bonus": 10.0,
+        "progressive_penetration_rate": 30.0,
+        "w_shape": 0.4,
+        "w_trend": 0.3,
+        "w_vol": 0.3,
+    }
 
 
 @app.put("/api/config/scoring")
-async def update_scoring_config_new(request: Request, req: ScoringConfigReq):
+async def update_scoring_config(request: Request, req: ScoringConfigReq):
     """
     更新打分配置
-    支持热更新打分配置，包括模式切换、参数调整和权重配置
+
+    支持热更新打分配置，包括模式切换、参数调整和权重配置。
+    配置会立即生效并持久化到 SQLite 数据库。
+
+    约束：
+    - w_shape + w_trend + w_vol 必须等于 1.0
+    - 所有参数必须在允许的范围内
     """
     repo = request.app.state.repo
     engine = request.app.state.engine
-    config_service = ConfigService(repo)
 
     # 获取当前配置作为基础
     current_config_json = await repo.get_secret("scoring_config")
@@ -1008,6 +809,7 @@ async def update_scoring_config_new(request: Request, req: ScoringConfigReq):
 
         elif len(update_data) > 0 and len(weight_updates) == 0:
             # 没有权重更新但权重总和不对，说明是旧配置有问题，自动修复
+            # 使用当前配置的比例进行重新平衡
             if total > 0:
                 new_data["w_shape"] = round(w_shape / total, 4)
                 new_data["w_trend"] = round(w_trend / total, 4)
@@ -1040,169 +842,20 @@ async def update_scoring_config_new(request: Request, req: ScoringConfigReq):
 
     # 更新引擎内存中的配置
     try:
-        from domain.strategy.scoring_config import ScoringConfig as ScoringConfigEntity
-        engine.scoring_config = ScoringConfigEntity(**new_data)
+        engine.scoring_config = ScoringConfig(**new_data)
     except ValueError as e:
         # 如果验证失败，回滚并使用默认配置
         logger.error(f"配置验证失败：{e}")
-        engine.scoring_config = ScoringConfigEntity()
+        engine.scoring_config = ScoringConfig()
 
     return {
         "status": "success",
-        "data": {
+        "message": "打分配置已热更新",
+        "config": {
             "mode": new_data.get("mode", "classic"),
             "w_shape": new_data.get("w_shape", 0.4),
             "w_trend": new_data.get("w_trend", 0.3),
             "w_vol": new_data.get("w_vol", 0.3),
-        },
-        "meta": {
-            "timestamp": int(time.time() * 1000),
-            "message": "打分配置已热更新"
-        }
-    }
-
-
-@app.get("/api/config/pinbar")
-async def get_pinbar_config(request: Request):
-    """
-    获取 Pinbar 策略配置
-    返回 Pinbar 形态识别参数
-    """
-    repo = request.app.state.repo
-    engine = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        engine = request.app.state.engine
-        data = await config_service.get_pinbar_config(engine.pinbar_config if hasattr(engine, 'pinbar_config') else None)
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"Pinbar 配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"Pinbar 配置获取失败：{str(e)}")
-
-
-@app.put("/api/config/pinbar")
-async def update_pinbar_config(request: Request, req: PinbarConfigReq):
-    """
-    更新 Pinbar 配置
-    支持热更新 Pinbar 形态识别参数
-    """
-    repo = request.app.state.repo
-    engine = request.app.state.engine
-    config_service = ConfigService(repo)
-
-    update_data = req.model_dump(exclude_unset=True)
-
-    # 更新引擎内存中的配置
-    if "body_max_ratio" in update_data:
-        engine.pinbar_config.body_max_ratio = update_data["body_max_ratio"]
-    if "shadow_min_ratio" in update_data:
-        engine.pinbar_config.shadow_min_ratio = update_data["shadow_min_ratio"]
-    if "volatility_atr_multiplier" in update_data:
-        engine.pinbar_config.volatility_atr_multiplier = update_data["volatility_atr_multiplier"]
-    if "doji_threshold" in update_data:
-        engine.pinbar_config.doji_threshold = update_data["doji_threshold"]
-    if "doji_shadow_bonus" in update_data:
-        engine.pinbar_config.doji_shadow_bonus = update_data["doji_shadow_bonus"]
-    if "mtf_trend_filter_mode" in update_data:
-        engine.pinbar_config.mtf_trend_filter_mode = update_data["mtf_trend_filter_mode"]
-    if "dynamic_sl_enabled" in update_data:
-        engine.pinbar_config.dynamic_sl_enabled = update_data["dynamic_sl_enabled"]
-    if "dynamic_sl_base" in update_data:
-        engine.pinbar_config.dynamic_sl_base = update_data["dynamic_sl_base"]
-    if "dynamic_sl_atr_multiplier" in update_data:
-        engine.pinbar_config.dynamic_sl_atr_multiplier = update_data["dynamic_sl_atr_multiplier"]
-
-    try:
-        data = await config_service.update_pinbar_config(update_data)
-        return _create_response(data, message="Pinbar 配置已热更新")
-    except Exception as e:
-        logger.error(f"Pinbar 配置更新失败：{e}")
-        raise HTTPException(status_code=500, detail=f"Pinbar 配置更新失败：{str(e)}")
-
-
-@app.get("/api/config/webhook")
-async def get_webhook_config(request: Request):
-    """
-    获取 Webhook 推送配置
-    返回各推送通道的启用状态和密钥配置
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        data = await config_service.get_webhook_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"Webhook 配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"Webhook 配置获取失败：{str(e)}")
-
-
-class WebhookConfigReq(BaseModel):
-    """Webhook 配置更新请求体"""
-    global_push_enabled: Optional[bool] = None
-    feishu_enabled: Optional[bool] = None
-    feishu_secret: Optional[str] = None
-    wecom_enabled: Optional[bool] = None
-    wecom_secret: Optional[str] = None
-
-
-@app.put("/api/config/webhook")
-async def update_webhook_config(request: Request, req: WebhookConfigReq):
-    """
-    更新 Webhook 配置
-    支持热更新各推送通道的启用状态和密钥
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    update_data = req.model_dump(exclude_unset=True)
-
-    try:
-        data = await config_service.update_webhook_config(update_data)
-        return _create_response(data, message="Webhook 配置已热更新")
-    except Exception as e:
-        logger.error(f"Webhook 配置更新失败：{e}")
-        raise HTTPException(status_code=500, detail=f"Webhook 配置更新失败：{str(e)}")
-
-
-# ==========================================
-# 5. 打分配置管理 (Scoring Config) - 保留旧接口兼容性
-# ==========================================
-# 注意：/api/config/scoring 接口已在上面第 4.5 节实现
-# 此处保留原有接口逻辑以保持向后兼容
-
-    # 验证模式
-    mode = new_data.get("mode", "classic")
-    if mode not in ["classic", "progressive", "custom"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"未知的打分模式：{mode}，可用模式：['classic', 'progressive', 'custom']"
-        )
-
-    # 保存到数据库
-    await repo.set_secret("scoring_config", json.dumps(new_data))
-
-    # 更新引擎内存中的配置
-    try:
-        from domain.strategy.scoring_config import ScoringConfig as ScoringConfigEntity
-        engine.scoring_config = ScoringConfigEntity(**new_data)
-    except ValueError as e:
-        # 如果验证失败，回滚并使用默认配置
-        logger.error(f"配置验证失败：{e}")
-        engine.scoring_config = ScoringConfigEntity()
-
-    return {
-        "status": "success",
-        "data": {
-            "mode": new_data.get("mode", "classic"),
-            "w_shape": new_data.get("w_shape", 0.4),
-            "w_trend": new_data.get("w_trend", 0.3),
-            "w_vol": new_data.get("w_vol", 0.3),
-        },
-        "meta": {
-            "timestamp": int(time.time() * 1000),
-            "message": "打分配置已热更新"
         }
     }
 

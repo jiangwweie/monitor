@@ -107,6 +107,7 @@ class Signal:
     source: str = "realtime"   # 信号来源: "realtime" (实时监控) | "history_scan" (历史回扫)
     is_contrarian: bool = False # 是否为逆势信号 (MTF soft 模式下)
     is_shape_divergent: bool = False # 是否为形态与趋势背离信号
+    quality_tier: str = "B"  # 信号质量分级："A" (精品) | "B" (普通) | "C" (观察)
 
 @dataclass
 class PositionSizing:

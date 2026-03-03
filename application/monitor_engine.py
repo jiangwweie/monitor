@@ -15,6 +15,7 @@ from core.interfaces import IDataFeed, IAccountReader, IRepository, INotifier
 from domain.strategy.pinbar import PinbarStrategy
 from domain.risk.sizer import PositionSizer
 from core.entities import Bar, ScoringWeights
+from domain.strategy.scoring_config import ScoringConfig
 from core.exceptions import RiskLimitExceeded
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ class CryptoRadarEngine:
         }  # 会被 config.py 层面动态覆盖
 
         # 策略使用的历史 K 线缓存 (按级别、币种双层隔离)
-        # 结构: {"15m": {"BTCUSDT": [Bar, Bar...]}, "1h": {...}}
+        # 结构：{"15m": {"BTCUSDT": [Bar, Bar...]}, "1h": {...}}
         self.history_bars: Dict[str, Dict[str, List[Bar]]] = defaultdict(
             lambda: defaultdict(list)
         )
@@ -102,7 +103,7 @@ class CryptoRadarEngine:
 
         total_tasks = len(self.active_symbols) * len(all_intervals)
         logger.info(
-            f"🔥 开始冷启动预热: {len(self.active_symbols)} 个币种 × {len(all_intervals)} 个级别 = {total_tasks} 个缓冲区"
+            f"🔥 开始冷启动预热：{len(self.active_symbols)} 个币种 × {len(all_intervals)} 个级别 = {total_tasks} 个缓冲区"
         )
 
         success_count = 0
@@ -129,12 +130,12 @@ class CryptoRadarEngine:
                     bars = bars[-warmup_bars:]
                     self.history_bars[ivl][sym.upper()] = bars
                     success_count += 1
-                    logger.info(f"  ✅ {sym} {ivl} 预加载 {len(bars)} 根K线")
+                    logger.info(f"  ✅ {sym} {ivl} 预加载 {len(bars)} 根 K 线")
 
                 except Exception as e:
                     logger.warning(f"  ⚠️ {sym} {ivl} 预加载失败 (非致命): {e}")
 
-        logger.info(f"🔥 冷启动预热完成: {success_count}/{total_tasks} 个缓冲区已就绪")
+        logger.info(f"🔥 冷启动预热完成：{success_count}/{total_tasks} 个缓冲区已就绪")
 
     async def start(self):
         """
@@ -145,7 +146,7 @@ class CryptoRadarEngine:
         await self._warmup_history()
 
         logger.info(
-            f"🚀 CryptoRadar 引擎已启动! 正在监听 {self.active_symbols} {self.monitor_intervals} K线流..."
+            f"🚀 CryptoRadar 引擎已启动！正在监听 {self.active_symbols} {self.monitor_intervals} K 线流..."
         )
 
         # 定义多重时间框架 (MTF) 的大级别映射关系
@@ -153,7 +154,7 @@ class CryptoRadarEngine:
             "15m": "1h",
             "1h": "4h",
             "4h": "1d",
-            "1d": "1d",  # 1d 暂时没有配置更大的周期，让其参考自身
+            "1d": "1d",  # 1d 暂时没有配置，让其参考自身
         }
 
         while True:
@@ -177,7 +178,7 @@ class CryptoRadarEngine:
                         continue
 
                     logger.debug(
-                        f"收到闭合 K 线: {current_bar.symbol} {current_bar.interval} {current_bar.timestamp} 收盘价: {current_bar.close}"
+                        f"收到闭合 K 线：{current_bar.symbol} {current_bar.interval} {current_bar.timestamp} 收盘价：{current_bar.close}"
                     )
 
                     if not self.system_enabled:
@@ -187,7 +188,7 @@ class CryptoRadarEngine:
                     ivl = current_bar.interval
 
                     # 只有当前收盘线的周期在我们目标监控列表里，才触发策略计算。
-                    # 如果这仅仅是一根用作"支撑大级别趋势"而不在监控列表的K线，我们只追加缓存，不触发打单检查。
+                    # 如果这仅仅是一根用作"支撑大级别趋势"而不在监控列表的 K 线，我们只追加缓存，不触发打单检查。
                     should_evaluate = ivl in self.monitor_intervals
 
                     current_history = self.history_bars[ivl][sym_upper]
@@ -209,7 +210,7 @@ class CryptoRadarEngine:
 
                                 higher_closes = [b.close for b in higher_history]
                                 higher_ema60 = calculate_ema(higher_closes, 60)
-                                # 如果当前价格在大级别 EMA之上则看多
+                                # 如果当前价格在大级别 EMA 之上则看多
                                 higher_trend = (
                                     "LONG"
                                     if current_bar.close > higher_ema60
@@ -236,7 +237,7 @@ class CryptoRadarEngine:
                         continue
 
                     logger.info(
-                        f"✨ 发现有效策略信号! 级别: {signal.interval} 方向: {signal.direction} 理由: {signal.reason}"
+                        f"✨ 发现有效策略信号！级别：{signal.interval} 方向：{signal.direction} 理由：{signal.reason}"
                     )
 
                     # 2. 探针：获取真实的账户只读状态
@@ -252,7 +253,7 @@ class CryptoRadarEngine:
                         self.api_weight_usage = min(100.0, self.api_weight_usage + 5.0)
                     except Exception as e:
                         self.api_latency_ms = 999
-                        logger.error(f"无法读取币安余额信息: {e}")
+                        logger.error(f"无法读取币安余额信息：{e}")
                         continue
 
                     # 3. 风控算仓大脑计算 (纯领域计算)
@@ -264,15 +265,28 @@ class CryptoRadarEngine:
                             max_leverage=self.max_leverage,
                         )
                     except RiskLimitExceeded as e:
-                        logger.warning(f"🚫 信号由于硬风控被拦截丢弃: {str(e)}")
+                        logger.warning(f"🚫 信号由于硬风控被拦截丢弃：{str(e)}")
                         continue
 
                     # 4. 只读动作下沉持久化入库用于审计
                     await self.repo.save_signal(signal)
                     await self.repo.save_position_sizing(sizing)
 
-                    # 5. 组装推送到用户的 Markdown 告警富文本
-                    markdown_message = self._format_message(sizing, account_balance)
+                    # 5. 根据信号质量分级决定推送策略
+                    # A 级：精品信号 - 立即推送 + 高亮
+                    # B 级：普通信号 - 正常推送
+                    # C 级：观察信号 - 仅记录不推送
+                    quality_tier = getattr(signal, 'quality_tier', 'B')
+
+                    if quality_tier == 'C':
+                        logger.info(
+                            f"📝 观察到 C 级信号：{signal.symbol} {signal.direction} (评分：{signal.score}, 仅记录不推送)"
+                        )
+                        # C 级信号只记录，不推送
+                        continue
+
+                    # 5.1 组装推送到用户的 Markdown 告警富文本
+                    markdown_message = self._format_message(sizing, account_balance, signal)
 
                     # 取出全局推送总闸状态，默认开启
                     global_push_val = await self.repo.get_secret("global_push_enabled")
@@ -281,11 +295,18 @@ class CryptoRadarEngine:
                     )
 
                     if is_global_push:
+                        # 根据信号等级添加前缀标记
+                        tier_prefix = "🌟【精品信号】" if quality_tier == 'A' else "📢【普通信号】"
+                        markdown_message = f"{tier_prefix}\n\n{markdown_message}"
+
                         # 并发广播给多个收信端，绝对不阻塞
                         await self.notifier.send_markdown(markdown_message)
+                        logger.info(
+                            f"✅ 已推送 {quality_tier}级信号：{signal.symbol} {signal.direction}"
+                        )
                     else:
                         logger.info(
-                            f"监控到信号: #{signal.symbol.upper()} - {signal.direction}，但全局推送 (global_push_enabled) 已关闭，跳过告警。"
+                            f"监控到信号：#{signal.symbol.upper()} - {signal.direction}，但全局推送 (global_push_enabled) 已关闭，跳过告警。"
                         )
 
             except Exception as e:
@@ -293,7 +314,7 @@ class CryptoRadarEngine:
 
                 self.is_connected = False
                 logger.error(
-                    f"引擎出现全局未处理的阻断级异常: {e}，将在 10 秒后重启内部大循环。\n{traceback.format_exc()}"
+                    f"引擎出现全局未处理的阻断级异常：{e}，将在 10 秒后重启内部大循环。\n{traceback.format_exc()}"
                 )
 
                 # 在此触发强制断网或异常告警推送
@@ -308,9 +329,10 @@ class CryptoRadarEngine:
         # 在循环最后或者后台任务中，模拟性能消耗衰减
         # 这里为了简化不另开 task，可放在循环空闲期，不过当前是阻塞流，由其他机制衰减亦可。
 
-    def _format_message(self, sizing, account) -> str:
+    def _format_message(self, sizing, account, signal=None) -> str:
         """组装 Markdown 通知，参考 docs/push.md 模板"""
-        signal = sizing.signal
+        if signal is None:
+            signal = sizing.signal
         timestamp_str = datetime.fromtimestamp(signal.timestamp / 1000).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
@@ -319,22 +341,27 @@ class CryptoRadarEngine:
         direction_emoji = "🟢 LONG" if signal.direction == "LONG" else "🔴 SHORT"
         ema_status = "Price > EMA60" if signal.direction == "LONG" else "Price < EMA60"
 
-        # 将打分(0-100)映射到模板要求的 (0-10)
+        # 将打分 (0-100) 映射到模板要求的 (0-10)
         display_score = round(signal.score / 10, 1)
 
+        # 信号等级标记
+        quality_tier = getattr(signal, 'quality_tier', 'B')
+        tier_badge = "🌟 精品" if quality_tier == 'A' else "📊 普通" if quality_tier == 'B' else "📝 观察"
+
         return (
-            f"**🚨 发现新交易信号 ({signal.reason})**\n"
+            f"**🚨 发现新交易信号 ({signal.reason})** [{tier_badge}]\n"
             f"**交易对**: #{signal.symbol.upper()}\n"
             f"**级别**: {signal.interval} | **方向**: {direction_emoji}\n"
             f"**时间**: {timestamp_str}\n\n"
-            f"- 预计入场: `{signal.entry_price}`\n"
-            f"- 初始止损: `{signal.stop_loss}`\n"
+            f"- 预计入场：`{signal.entry_price}`\n"
+            f"- 初始止损：`{signal.stop_loss}`\n"
             f"- 预期 TP1: `{signal.take_profit_1}` (1.5R)\n\n"
-            f"- EMA60 状态: {ema_status}\n"
-            f"- ADX 强度: `Active`\n"
-            f"- 形态评分: `{display_score}/10`\n"
-            f"- 影线占比: `{signal.shadow_ratio}` 倍\n"
-            f"- EMA 距离: `{signal.ema_distance}%`\n"
-            f"- ATR 波动率: `{signal.volatility_atr}`\n\n"
+            f"- EMA60 状态：{ema_status}\n"
+            f"- ADX 强度：`Active`\n"
+            f"- 形态评分：`{display_score}/10`\n"
+            f"- 影线占比：`{signal.shadow_ratio}` 倍\n"
+            f"- EMA 距离：`{signal.ema_distance}%`\n"
+            f"- ATR 波动率：`{signal.volatility_atr}`\n"
+            f"- 信号等级：`{quality_tier}级`\n\n"
             f"- 只读风控 (建议杠杆 {sizing.suggested_leverage:.1f}x)\n"
         )

@@ -68,6 +68,7 @@ class ChartService:
         symbol: str,
         interval: str,
         limit: int = 200,
+        end_time: Optional[int] = None,
     ) -> dict:
         """
         获取聚合图表数据 (K线 + 信号标记)。
@@ -75,6 +76,7 @@ class ChartService:
         :param symbol: 交易对 (如 BTCUSDT)
         :param interval: 时间级别 (如 15m, 1h, 4h)
         :param limit: K 线根数 (默认 200, 最大 1500)
+        :param end_time: K 线结束时间戳 (毫秒)，默认当前时间（用于历史信号图表）
         :return: TradingView 兼容的 {symbol, interval, klines, markers} 字典
         """
         if interval not in VALID_INTERVALS:
@@ -84,7 +86,7 @@ class ChartService:
         symbol = symbol.upper()
 
         # === 1. 尝试命中缓存 ===
-        cache_key = f"{symbol}_{interval}_{limit}"
+        cache_key = f"{symbol}_{interval}_{limit}_" + (str(end_time) if end_time else "now")
         cached = self._cache.get(cache_key)
         if cached is not None:
             logger.debug(f"[ChartService] 缓存命中: {cache_key}")
@@ -93,11 +95,15 @@ class ChartService:
         # === 2. 并发拉取 K 线 + 查询信号 ===
         interval_ms = INTERVAL_MS.get(interval, 3_600_000)
 
-        klines_task = self._fetch_klines(symbol, interval, limit)
-        # 信号查询需要知道时间范围，先估算
-        now_ms = int(time.time() * 1000)
-        start_ms = now_ms - (limit * interval_ms)
-        signals_task = self._query_signals(symbol, interval, start_ms, now_ms)
+        # 如果没有指定 end_time，使用当前时间
+        if end_time is None:
+            end_time = int(time.time() * 1000)
+
+        # 计算开始时间
+        start_ms = end_time - (limit * interval_ms)
+
+        klines_task = self._fetch_klines_with_timerange(symbol, interval, start_ms, end_time)
+        signals_task = self._query_signals(symbol, interval, start_ms, end_time)
 
         klines, signals = await asyncio.gather(klines_task, signals_task)
 
@@ -143,6 +149,60 @@ class ChartService:
                 raw = resp.json()
         except Exception as e:
             logger.error(f"[ChartService] K线拉取失败: {e}")
+            return []
+
+        klines = []
+        for k in raw:
+            klines.append({
+                "time": int(k[0]) // 1000,  # 开盘时间 ms → 秒级 (TradingView 要求)
+                "open": float(k[1]),
+                "high": float(k[2]),
+                "low": float(k[3]),
+                "close": float(k[4]),
+                "volume": float(k[5]),
+            })
+
+        return klines
+
+    async def _fetch_klines_with_timerange(
+        self, symbol: str, interval: str, start_ms: int, end_ms: int
+    ) -> List[dict]:
+        """
+        从币安拉取指定时间范围内的 K 线数据。
+        使用 startTime 和 endTime 参数精准控制时间范围。
+        """
+        import httpx
+
+        # 币安 API 支持的单次最大 limit
+        max_limit = 1000
+
+        # 计算需要多少条 K 线
+        interval_ms = INTERVAL_MS.get(interval, 3600000)
+        needed_bars = int((end_ms - start_ms) / interval_ms) + 10
+
+        # 如果需要的 K 线超过 max_limit，需要分批次拉取
+        limit = min(needed_bars, max_limit)
+
+        # 计算 startTime（ endTime 往前推）
+        start_time = end_ms - (limit * interval_ms)
+
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "startTime": int(start_time),
+            "endTime": int(end_ms),
+            "limit": limit,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(
+                    "https://fapi.binance.com/fapi/v1/klines", params=params
+                )
+                resp.raise_for_status()
+                raw = resp.json()
+        except Exception as e:
+            logger.error(f"[ChartService] K 线拉取失败：{e}")
             return []
 
         klines = []

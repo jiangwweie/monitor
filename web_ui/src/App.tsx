@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Activity, Radar, Wallet, Settings2, Clock, Radar as RadarIcon, Sliders } from "lucide-react";
+import { Activity, Radar, Wallet, Settings2, Clock, Radar as RadarIcon } from "lucide-react";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -11,7 +11,6 @@ import { SignalRadar } from "@/components/SignalRadar";
 import { Positions } from "@/components/Positions";
 import { Settings } from "@/components/Settings";
 import { PositionDetailModal } from "@/components/PositionDetailModal";
-import { ScoringConfigPanel } from "@/components/scoring";
 import { usePolling } from "@/hooks/usePolling";
 
 const AVAILABLE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
@@ -162,8 +161,8 @@ export default function App() {
 
   // 同步系统状态到 state
   useEffect(() => {
-    if (systemStatusData) {
-      setSystemStatus((prev) => ({ ...prev, ...systemStatusData }));
+    if (systemStatusData?.data) {
+      setSystemStatus((prev) => ({ ...prev, ...systemStatusData.data }));
     }
   }, [systemStatusData]);
 
@@ -234,124 +233,6 @@ export default function App() {
   // 配置变更处理
   const handleConfigChange = (field: string, value: any) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSymbolToggle = (sym: string) => {
-    const current = config.symbols
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (current.includes(sym)) {
-      handleConfigChange("symbols", current.filter((s) => s !== sym).join(","));
-    } else {
-      handleConfigChange("symbols", [...current, sym].join(","));
-    }
-  };
-
-  const handleWeightAutoBalance = (field: string, value: number[]) => {
-    const newVal = value[0];
-    setConfig((prev) => {
-      const keys = ["w_shape", "w_trend", "w_vol"] as const;
-      const otherKeys = keys.filter((k) => k !== field);
-      const oldVal = prev[field as keyof typeof prev] as number;
-      const diff = newVal - oldVal;
-      const sumOthers = otherKeys.reduce(
-        (acc, k) => acc + (prev[k as keyof typeof prev] as number),
-        0
-      );
-
-      let nextState = { ...prev, [field]: newVal };
-
-      if (sumOthers === 0) {
-        const remainder = 100 - newVal;
-        nextState[otherKeys[0]] = remainder / 2;
-        nextState[otherKeys[1]] = remainder / 2;
-      } else {
-        otherKeys.forEach((k) => {
-          const current = prev[k as keyof typeof prev] as number;
-          const ratio = current / sumOthers;
-          nextState[k] = Math.max(0, current - diff * ratio);
-        });
-      }
-
-      const intShape = Math.round(nextState.w_shape as number);
-      const intTrend = Math.round(nextState.w_trend as number);
-      const intVol = 100 - intShape - intTrend;
-
-      return {
-        ...nextState,
-        w_shape: intShape,
-        w_trend: intTrend,
-        w_vol: intVol,
-      };
-    });
-  };
-
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const payload = {
-      system_enabled: Boolean(config.system_enabled),
-      global_push_enabled: Boolean(config.global_push_enabled),
-      active_symbols: config.symbols
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      monitor_intervals: config.monitor_intervals,
-      risk_config: {
-        risk_pct: Math.round(Number(config.risk_pct) * 100) / 10000.0,
-        max_sl_dist: Math.round(Number(config.max_sl_dist) * 100) / 10000.0,
-        max_leverage: Number(config.max_leverage),
-      },
-      scoring_weights: {
-        w_shape: Number(config.w_shape) / 100.0,
-        w_trend: Number(config.w_trend) / 100.0,
-        w_vol: Number(config.w_vol) / 100.0,
-      },
-      webhook_settings: {
-        feishu_enabled: Boolean(config.feishu_enabled),
-        ...(config.feishu_secret ? { feishu_secret: config.feishu_secret } : {}),
-        wecom_enabled: Boolean(config.wecom_enabled),
-        ...(config.wecom_secret ? { wecom_secret: config.wecom_secret } : {}),
-      },
-      exchange_settings: {
-        ...(config.binance_api_key ? { binance_api_key: config.binance_api_key } : {}),
-        ...(config.binance_api_secret ? { binance_api_secret: config.binance_api_secret } : {}),
-      },
-      pinbar_config: {
-        body_max_ratio: Number(config.body_max_ratio),
-        shadow_min_ratio: Number(config.shadow_min_ratio),
-        volatility_atr_multiplier: Number(config.volatility_atr_multiplier),
-        doji_threshold: Number(config.doji_threshold || 0.05),
-        doji_shadow_bonus: Number(config.doji_shadow_bonus || 0.6),
-        mtf_trend_filter_mode: config.mtf_trend_filter_mode || "soft",
-        dynamic_sl_enabled: config.dynamic_sl_enabled ?? true,
-        dynamic_sl_base: Number(config.dynamic_sl_base || 0.035),
-        dynamic_sl_atr_multiplier: Number(config.dynamic_sl_atr_multiplier || 0.5),
-      },
-    };
-
-    try {
-      const res = await fetch("http://localhost:8000/api/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        toast.success("配置已更新 (Configuration Saved)", {
-          description: "新的风控与评分权重已生效。",
-          className: "bg-zinc-900 border border-white/10 text-zinc-100",
-        });
-      } else {
-        throw new Error("Save failed");
-      }
-    } catch (error) {
-      toast.error("保存失败 (Save Failed)", {
-        description: "后端服务离线或网络异常。",
-        className: "bg-red-950 border border-red-900",
-      });
-    }
   };
 
   const handleOpenPositionDetail = async (symbol: string) => {
@@ -480,13 +361,6 @@ export default function App() {
                 <Settings2 className="w-4 h-4 mr-2" />
                 系统设置
               </TabsTrigger>
-              <TabsTrigger
-                value="scoring"
-                className="rounded-xl px-6 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:shadow-none transition-all"
-              >
-                <Sliders className="w-4 h-4 mr-2" />
-                打分配置
-              </TabsTrigger>
             </TabsList>
 
             {/* Dashboard Tab */}
@@ -524,15 +398,7 @@ export default function App() {
               <Settings
                 config={config}
                 onConfigChange={handleConfigChange}
-                onSymbolToggle={handleSymbolToggle}
-                onWeightAutoBalance={handleWeightAutoBalance}
-                onSave={handleSaveConfig}
               />
-            </TabsContent>
-
-            {/* Scoring Config Tab */}
-            <TabsContent value="scoring">
-              <ScoringConfigPanel />
             </TabsContent>
           </Tabs>
         </main>

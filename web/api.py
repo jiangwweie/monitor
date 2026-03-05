@@ -5,7 +5,7 @@ Web API 模块
 
 import time
 from typing import Optional, List, Dict, Literal, Any
-from fastapi import FastAPI, Request, Query, Body, HTTPException
+from fastapi import FastAPI, Request, Query, Body, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -870,6 +870,45 @@ async def get_monitor_config(request: Request):
         raise HTTPException(status_code=500, detail=f"监控配置获取失败：{str(e)}")
 
 
+class MonitorConfigReq(BaseModel):
+    """监控配置更新请求体"""
+    active_symbols: Optional[List[str]] = None
+    monitor_intervals: Optional[Dict[str, Any]] = None
+
+
+@app.put("/api/config/monitor")
+async def update_monitor_config(request: Request, req: MonitorConfigReq):
+    """
+    更新监控配置
+    支持热更新活跃币种列表和监控周期
+    """
+    repo = request.app.state.repo
+    engine = request.app.state.engine
+    config_service = ConfigService(repo)
+
+    update_data = req.model_dump(exclude_unset=True)
+
+    try:
+        # 更新引擎内存中的配置
+        if "active_symbols" in update_data:
+            engine.active_symbols = update_data["active_symbols"]
+        if "monitor_intervals" in update_data:
+            new_intervals = {
+                k: IntervalConfig(use_trend_filter=v.get("use_trend_filter", False))
+                for k, v in update_data["monitor_intervals"].items()
+            }
+            engine.monitor_intervals = new_intervals
+
+        data = await config_service.update_monitor_config(update_data)
+        return _create_response(data, message="监控配置已热更新")
+    except ConfigValidationError as e:
+        logger.warning(f"监控配置校验失败：{e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"监控配置更新失败：{e}")
+        raise HTTPException(status_code=500, detail=f"监控配置更新失败：{str(e)}")
+
+
 @app.get("/api/config/risk")
 async def get_risk_config(request: Request):
     """
@@ -1069,7 +1108,6 @@ async def get_pinbar_config(request: Request):
     返回 Pinbar 形态识别参数
     """
     repo = request.app.state.repo
-    engine = request.app.state.repo
     config_service = ConfigService(repo)
 
     try:
@@ -1292,3 +1330,212 @@ async def preview_scoring_score(request: Request, req: ScorePreviewRequest = Bod
             }
         }
     }
+
+
+# ==========================================
+# 6. 推送配置管理 (Push Config)
+# ==========================================
+class PushConfigReq(BaseModel):
+    """推送配置更新请求体"""
+    global_push_enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    feishu_webhook_url: Optional[str] = None
+    wecom_enabled: Optional[bool] = None
+    wecom_webhook_url: Optional[str] = None
+    telegram_enabled: Optional[bool] = None
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+
+
+@app.get("/api/config/push")
+async def get_push_config(request: Request):
+    """
+    获取推送配置
+    返回各推送通道（飞书、企业微信、Telegram）的启用状态和密钥配置
+    """
+    repo = request.app.state.repo
+    config_service = ConfigService(repo)
+
+    try:
+        data = await config_service.get_push_config()
+        return _create_response(data)
+    except Exception as e:
+        logger.error(f"推送配置获取失败：{e}")
+        raise HTTPException(status_code=500, detail=f"推送配置获取失败：{str(e)}")
+
+
+@app.put("/api/config/push")
+async def update_push_config(request: Request, req: PushConfigReq):
+    """
+    更新推送配置
+    支持热更新各推送通道的启用状态和密钥
+    """
+    repo = request.app.state.repo
+    config_service = ConfigService(repo)
+
+    update_data = req.model_dump(exclude_unset=True)
+
+    try:
+        data = await config_service.update_push_config(update_data)
+        return _create_response(data, message="推送配置已热更新")
+    except Exception as e:
+        logger.error(f"推送配置更新失败：{e}")
+        raise HTTPException(status_code=500, detail=f"推送配置更新失败：{str(e)}")
+
+
+# ==========================================
+# 7. 交易所配置管理 (Exchange Config)
+# ==========================================
+class ExchangeConfigReq(BaseModel):
+    """交易所配置更新请求体"""
+    binance_api_key: Optional[str] = Field(None, min_length=1)
+    binance_api_secret: Optional[str] = Field(None, min_length=1)
+    use_testnet: Optional[bool] = None
+
+
+@app.get("/api/config/exchange")
+async def get_exchange_config(request: Request):
+    """
+    获取交易所配置
+    返回 Binance API 密钥配置（密钥脱敏显示）
+    """
+    repo = request.app.state.repo
+    config_service = ConfigService(repo)
+
+    try:
+        data = await config_service.get_exchange_config()
+        return _create_response(data)
+    except Exception as e:
+        logger.error(f"交易所配置获取失败：{e}")
+        raise HTTPException(status_code=500, detail=f"交易所配置获取失败：{str(e)}")
+
+
+@app.put("/api/config/exchange")
+async def update_exchange_config(request: Request, req: ExchangeConfigReq):
+    """
+    更新交易所配置
+    支持热更新 Binance API 密钥
+    """
+    repo = request.app.state.repo
+    engine = request.app.state.engine
+    config_service = ConfigService(repo)
+
+    update_data = req.model_dump(exclude_unset=True)
+
+    # 更新引擎内存中的配置
+    if "binance_api_key" in update_data:
+        engine.account_reader.api_key = update_data["binance_api_key"]
+    if "binance_api_secret" in update_data:
+        engine.account_reader.api_secret = update_data["binance_api_secret"]
+
+    try:
+        data = await config_service.update_exchange_config(update_data)
+        return _create_response(data, message="交易所配置已热更新")
+    except Exception as e:
+        logger.error(f"交易所配置更新失败：{e}")
+        raise HTTPException(status_code=500, detail=f"交易所配置更新失败：{str(e)}")
+
+
+# ==========================================
+# 8. 配置导入导出 (Config Import/Export)
+# ==========================================
+import os
+import yaml
+from datetime import datetime
+
+from domain.services.config_service import ConfigValidationError
+
+@app.post("/api/config/export")
+async def export_config(request: Request):
+    """
+    导出配置为 YAML 文件
+    敏感字段（binance_api_key/secret）会被置空
+    """
+    repo = request.app.state.repo
+    config_service = ConfigService(repo)
+
+    try:
+        # 获取所有配置
+        all_config = await config_service.get_all_config_for_export()
+
+        # 生成带时间戳的文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        export_dir = "config"
+        os.makedirs(export_dir, exist_ok=True)
+        file_path = os.path.join(export_dir, f"exported_config_{timestamp}.yaml")
+
+        # 写入 YAML 文件
+        with open(file_path, "w", encoding="utf-8") as f:
+            yaml.dump(all_config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+        logger.info(f"配置已导出：{file_path}")
+
+        return _create_response({
+            "file_path": file_path,
+            "exported_at": timestamp,
+        }, message=f"配置已导出到 {file_path}")
+
+    except Exception as e:
+        logger.error(f"配置导出失败：{e}")
+        raise HTTPException(status_code=500, detail=f"配置导出失败：{str(e)}")
+
+
+@app.post("/api/config/import")
+async def import_config(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    yaml_content: Optional[str] = Form(None)
+):
+    """
+    从 YAML 导入配置
+    支持文件上传或直接传入 yaml_content
+    """
+    repo = request.app.state.repo
+    engine = request.app.state.engine
+    config_service = ConfigService(repo)
+
+    content = yaml_content
+
+    # 如果上传了文件，读取文件内容
+    if file:
+        if not file.filename or not (file.filename.endswith(".yaml") or file.filename.endswith(".yml")):
+            raise HTTPException(status_code=400, detail="文件格式错误，请上传 .yaml 或 .yml 文件")
+        try:
+            file_bytes = await file.read()
+            content = file_bytes.decode("utf-8")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"读取文件失败：{str(e)}")
+
+    if not content:
+        raise HTTPException(status_code=400, detail="yaml_content 或 file 必须提供一个")
+
+    try:
+        # 解析 YAML
+        config = yaml.safe_load(content)
+        if not isinstance(config, dict):
+            raise ValueError("YAML 内容必须是字典格式")
+
+        # 校验并导入配置
+        imported_config = await config_service.import_config_from_yaml(config, engine)
+
+        logger.info("配置导入成功")
+
+        return _create_response({
+            "imported_config": imported_config,
+        }, message="配置导入成功")
+
+    except ConfigValidationError as e:
+        logger.warning(f"配置校验失败：{e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except yaml.YAMLError as e:
+        logger.error(f"YAML 解析失败：{e}")
+        raise HTTPException(status_code=400, detail=f"YAML 格式错误：{str(e)}")
+
+    except ValueError as e:
+        logger.error(f"配置验证失败：{e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        logger.error(f"配置导入失败：{e}")
+        raise HTTPException(status_code=500, detail=f"配置导入失败：{str(e)}")

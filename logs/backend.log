@@ -1,0 +1,1283 @@
+/Users/jiangwei/Documents/2026/project/monitor/web/api.py:282: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  sort_by: str = Query("timestamp", regex="^(timestamp|score)$"),
+/Users/jiangwei/Documents/2026/project/monitor/web/api.py:283: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  order: str = Query("desc", regex="^(asc|desc)$"),
+INFO:     Started server process [62391]
+INFO:     Waiting for application startup.
+2026-03-05 11:13:16,526 [INFO] application.monitor_engine - 🔥 开始冷启动预热：3 个币种 × 3 个级别 = 9 个缓冲区
+2026-03-05 11:13:16,527 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 ETHUSDT 4h from 2026-02-16 to 2026-03-05, 预估 107 根K线
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-03-05 11:13:17,076 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=ETHUSDT&interval=4h&startTime=1771200000000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:17,079 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: ETHUSDT 4h 共 103 根K线, 1 个批次
+2026-03-05 11:13:17,082 [INFO] application.monitor_engine -   ✅ ETHUSDT 4h 预加载 100 根 K 线
+2026-03-05 11:13:17,082 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 ETHUSDT 1h from 2026-02-28 to 2026-03-05, 预估 143 根K线
+2026-03-05 11:13:17,508 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=ETHUSDT&interval=1h&startTime=1772236800000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:17,535 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: ETHUSDT 1h 共 124 根K线, 1 个批次
+2026-03-05 11:13:17,537 [INFO] application.monitor_engine -   ✅ ETHUSDT 1h 预加载 100 根 K 线
+2026-03-05 11:13:17,538 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 ETHUSDT 15m from 2026-03-04 to 2026-03-05, 预估 191 根K线
+2026-03-05 11:13:17,910 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=ETHUSDT&interval=15m&startTime=1772582400000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:17,913 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: ETHUSDT 15m 共 109 根K线, 1 个批次
+2026-03-05 11:13:17,915 [INFO] application.monitor_engine -   ✅ ETHUSDT 15m 预加载 100 根 K 线
+2026-03-05 11:13:17,915 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 BTCUSDT 4h from 2026-02-16 to 2026-03-05, 预估 107 根K线
+2026-03-05 11:13:18,375 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=4h&startTime=1771200000000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:18,378 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: BTCUSDT 4h 共 103 根K线, 1 个批次
+2026-03-05 11:13:18,380 [INFO] application.monitor_engine -   ✅ BTCUSDT 4h 预加载 100 根 K 线
+2026-03-05 11:13:18,381 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 BTCUSDT 1h from 2026-02-28 to 2026-03-05, 预估 143 根K线
+2026-03-05 11:13:18,834 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1h&startTime=1772236800000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:18,837 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: BTCUSDT 1h 共 124 根K线, 1 个批次
+2026-03-05 11:13:18,840 [INFO] application.monitor_engine -   ✅ BTCUSDT 1h 预加载 100 根 K 线
+2026-03-05 11:13:18,840 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 BTCUSDT 15m from 2026-03-04 to 2026-03-05, 预估 191 根K线
+2026-03-05 11:13:19,220 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=15m&startTime=1772582400000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:19,221 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: BTCUSDT 15m 共 109 根K线, 1 个批次
+2026-03-05 11:13:19,223 [INFO] application.monitor_engine -   ✅ BTCUSDT 15m 预加载 100 根 K 线
+2026-03-05 11:13:19,223 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 SOLUSDT 4h from 2026-02-16 to 2026-03-05, 预估 107 根K线
+2026-03-05 11:13:19,606 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=SOLUSDT&interval=4h&startTime=1771200000000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:19,608 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: SOLUSDT 4h 共 103 根K线, 1 个批次
+2026-03-05 11:13:19,609 [INFO] application.monitor_engine -   ✅ SOLUSDT 4h 预加载 100 根 K 线
+2026-03-05 11:13:19,610 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 SOLUSDT 1h from 2026-02-28 to 2026-03-05, 预估 143 根K线
+2026-03-05 11:13:19,988 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=SOLUSDT&interval=1h&startTime=1772236800000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:19,990 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: SOLUSDT 1h 共 124 根K线, 1 个批次
+2026-03-05 11:13:19,991 [INFO] application.monitor_engine -   ✅ SOLUSDT 1h 预加载 100 根 K 线
+2026-03-05 11:13:19,991 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 开始分片拉取 SOLUSDT 15m from 2026-03-04 to 2026-03-05, 预估 191 根K线
+2026-03-05 11:13:20,373 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/klines?symbol=SOLUSDT&interval=15m&startTime=1772582400000&endTime=1772755199999&limit=1500 "HTTP/1.1 200 OK"
+2026-03-05 11:13:20,376 [INFO] infrastructure.feed.binance_kline_fetcher - [KlineFetcher] 采集完成: SOLUSDT 15m 共 109 根K线, 1 个批次
+2026-03-05 11:13:20,378 [INFO] application.monitor_engine -   ✅ SOLUSDT 15m 预加载 100 根 K 线
+2026-03-05 11:13:20,379 [INFO] application.monitor_engine - 🔥 冷启动预热完成：9/9 个缓冲区已就绪
+2026-03-05 11:13:20,379 [INFO] application.monitor_engine - 🚀 CryptoRadar 引擎已启动！正在监听 ['ETHUSDT', 'BTCUSDT', 'SOLUSDT'] {'15m': IntervalConfig(use_trend_filter=False), '1h': IntervalConfig(use_trend_filter=False), '4h': IntervalConfig(use_trend_filter=False)} K 线流...
+2026-03-05 11:13:20,379 [INFO] infrastructure.feed.binance_ws - 正在连接 Binance WebSocket (组合流): wss://fstream.binance.com/stream?streams=ethusdt@kline_4h/ethusdt@kline_1h/ethusdt@kline_15m/btcusdt@kline_4h/btcusdt@kline_1h/btcusdt@kline_15m/solusdt@kline_4h/solusdt@kline_1h/solusdt@kline_15m
+2026-03-05 11:13:20,833 [INFO] infrastructure.feed.binance_ws - 已成功建立组合 websocket 连接: ethusdt@kline_4h/ethusdt@kline_1h/ethusdt@kline_15m/btcusdt@kline_4h/btcusdt@kline_1h/btcusdt@kline_15m/solusdt@kline_4h/solusdt@kline_1h/solusdt@kline_15m
+INFO:     127.0.0.1:62908 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62908 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62917 - "GET /api/preferences/view HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62914 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62917 - "GET /api/preferences/view HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62914 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62916 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62916 - "GET /api/config HTTP/1.1" 200 OK
+2026-03-05 11:14:09,555 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v2/account?timestamp=1772680449169&signature=978b8cddbf0cefff57e508514378a4628aeed10ebf90cc27466987d5d4e6aa16 "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:62912 - "GET /api/account/balance HTTP/1.1" 200 OK
+2026-03-05 11:14:10,084 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v2/account?timestamp=1772680449583&signature=cabf2142b292251f3c30bd3cb7a261703c7be6990235506d6487b1c468d18d9c "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:62912 - "GET /api/account/balance HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62927 - "GET /api/config/scoring HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62927 - "GET /api/config/scoring HTTP/1.1" 200 OK
+2026-03-05 11:14:20,075 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v2/positionRisk?timestamp=1772680459719&symbol=ETHUSDT&signature=d4e0b6ea85acdec7cda5ac270f60699547f0e79b3e4433e4cf091d1cfa69420a "HTTP/1.1 200 OK"
+2026-03-05 11:14:20,078 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v1/openOrders?timestamp=1772680459719&symbol=ETHUSDT&signature=d4e0b6ea85acdec7cda5ac270f60699547f0e79b3e4433e4cf091d1cfa69420a "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:62927 - "GET /api/account/position/detail/ETHUSDT HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62942 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62942 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62950 - "GET /api/preferences/view HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62947 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62950 - "GET /api/preferences/view HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62947 - "GET /api/signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62949 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62949 - "GET /api/config HTTP/1.1" 200 OK
+2026-03-05 11:14:25,720 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v2/account?timestamp=1772680465327&signature=5d8e016870c67f5c43778142a3047f02611403a3a2cb5ae32c885ce588976513 "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:62945 - "GET /api/account/balance HTTP/1.1" 200 OK
+2026-03-05 11:14:26,133 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v2/account?timestamp=1772680465747&signature=4e99a194d6be2929ff1a0efaad26beb6d988572655a5d3e42b1439cb8041025a "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:62945 - "GET /api/account/balance HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62973 - "GET /api/system/status HTTP/1.1" 200 OK
+2026-03-05 11:15:00,541 [INFO] application.monitor_engine - ✨ 发现有效策略信号！级别：15m 方向：SHORT 理由：Pinbar+EMA60
+2026-03-05 11:15:04,058 [INFO] httpx - HTTP Request: GET https://fapi.binance.com/fapi/v2/account?timestamp=1772680500541&signature=e7552345033cd2caab9f911a2d9075d86631878f3531ca3e02de210ec0d2251c "HTTP/1.1 200 OK"
+2026-03-05 11:15:04,071 [ERROR] application.monitor_engine - 引擎出现全局未处理的阻断级异常：no such table: signals，将在 10 秒后重启内部大循环。
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/application/monitor_engine.py", line 272, in start
+    await self.repo.save_signal(signal)
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 107, in save_signal
+    await db.execute('''
+    ...<23 lines>...
+    ))
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: signals
+
+2026-03-05 11:15:04,071 [INFO] infrastructure.notify.broadcaster - 正在准备向 3 个子频道并行广播消息...
+2026-03-05 11:15:04,072 [ERROR] infrastructure.notify.feishu - 飞书推送未知异常: no such table: configs
+2026-03-05 11:15:04,072 [ERROR] infrastructure.notify.wecom - 企业微信推送未知异常: no such table: configs
+2026-03-05 11:15:04,072 [ERROR] infrastructure.notify.telegram - Telegram 推送遭遇了意料外的错误: no such table: configs
+2026-03-05 11:15:14,072 [INFO] infrastructure.feed.binance_ws - 正在连接 Binance WebSocket (组合流): wss://fstream.binance.com/stream?streams=ethusdt@kline_4h/ethusdt@kline_1h/ethusdt@kline_15m/btcusdt@kline_4h/btcusdt@kline_1h/btcusdt@kline_15m/solusdt@kline_4h/solusdt@kline_1h/solusdt@kline_15m
+2026-03-05 11:15:14,677 [INFO] infrastructure.feed.binance_ws - 已成功建立组合 websocket 连接: ethusdt@kline_4h/ethusdt@kline_1h/ethusdt@kline_15m/btcusdt@kline_4h/btcusdt@kline_1h/btcusdt@kline_15m/solusdt@kline_4h/solusdt@kline_1h/solusdt@kline_15m
+INFO:     127.0.0.1:62994 - "GET /api/system/status HTTP/1.1" 200 OK
+2026-03-05 11:15:25,272 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:62997 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:62996 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+INFO:     127.0.0.1:63000 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63006 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63008 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:16:25,267 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63009 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63016 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63020 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63022 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:17:25,274 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63023 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63026 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63031 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63034 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:18:25,269 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63035 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63039 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63051 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63053 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:19:25,263 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63054 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63057 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63061 - "GET /api/system/status HTTP/1.1" 200 OK
+2026-03-05 11:20:25,263 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63064 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63063 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+INFO:     127.0.0.1:63067 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63097 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63099 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:21:25,264 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63100 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63129 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63134 - "GET /api/system/status HTTP/1.1" 200 OK
+2026-03-05 11:22:25,261 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63137 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63136 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+INFO:     127.0.0.1:63140 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63145 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63147 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:23:25,261 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63148 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63153 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63156 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63158 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:24:25,257 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63159 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63196 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63213 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63215 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:25:25,257 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63216 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63224 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63239 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63241 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:26:25,257 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63242 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63264 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63272 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63274 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:27:25,257 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63275 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63278 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63324 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63327 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:28:25,247 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63328 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63340 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63346 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63348 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:29:25,246 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63349 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63359 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63363 - "GET /api/system/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63365 - "GET /api/account/balance HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/protocols/http/h11_impl.py", line 410, in run_asgi
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/applications.py", line 1160, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/applications.py", line 107, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 95, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 153, in simple_response
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 716, in __call__
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 736, in app
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/routing.py", line 290, in handle
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 119, in app
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 105, in app
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 431, in app
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/fastapi/routing.py", line 313, in run_endpoint_function
+  File "/Users/jiangwei/Documents/2026/project/monitor/web/api.py", line 188, in get_account_balance
+    api_key = await repo.get_secret("binance_api_key")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/infrastructure/repo/sqlite_repo.py", line 247, in get_secret
+    cursor = await db.execute('SELECT config_value FROM configs WHERE config_key = ?', (key,))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 223, in execute
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 160, in _execute
+  File "/Users/jiangwei/Documents/2026/project/monitor/venv/lib/python3.14/site-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+sqlite3.OperationalError: no such table: configs
+2026-03-05 11:30:25,247 [ERROR] web.api - 信号查询失败：no such table: signals
+INFO:     127.0.0.1:63366 - "GET /api/signals HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:63369 - "GET /api/system/status HTTP/1.1" 200 OK

@@ -57,3 +57,8 @@ _agent/
 _agents/
 scripts/test_*.py
 /tmp/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env

@@ -48,11 +48,12 @@ export function PushTab({ initialConfig, onConfigChange }: PushTabProps) {
         wecom_enabled: Boolean(formData.wecom_enabled),
       };
 
-      if (formData.feishu_secret) {
-        payload.feishu_secret = formData.feishu_secret;
+      // 只有当用户输入了新的密钥时才发送
+      if (formData.feishu_secret && !formData.feishu_secret.includes("•••")) {
+        payload.feishu_webhook_url = formData.feishu_secret;
       }
-      if (formData.wecom_secret) {
-        payload.wecom_secret = formData.wecom_secret;
+      if (formData.wecom_secret && !formData.wecom_secret.includes("•••")) {
+        payload.wecom_webhook_url = formData.wecom_secret;
       }
 
       const res = await fetch("http://localhost:8000/api/config/push", {

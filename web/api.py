@@ -51,8 +51,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "http://localhost:5174",
         "http://localhost:5176",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
         "http://127.0.0.1:5176",
     ],
     allow_credentials=True,
@@ -348,6 +350,15 @@ async def delete_signals(request: Request, req: DeleteSignalsReq):
     return {"status": "success", "deleted_count": deleted}
 
 
+@app.delete("/api/signals/clear")
+async def clear_all_signals(request: Request):
+    """清空所有信号记录"""
+    repo = request.app.state.repo
+
+    deleted = await repo.clear_all_signals()
+    return {"status": "success", "deleted_count": deleted}
+
+
 # ==========================================
 # 2.5 历史信号检查 (History Scan)
 # ==========================================
@@ -621,10 +632,51 @@ class ConfigUpdateReq(BaseModel):
     )
 
 
+async def get_pinbar_config_from_db(repo, engine_pinbar_config):
+    """从数据库读取 pinbar 配置，如果数据库中没有则返回引擎配置"""
+    pinbar_config_json = await repo.get_secret("pinbar_config")
+    if pinbar_config_json:
+        try:
+            return json.loads(pinbar_config_json)
+        except json.JSONDecodeError:
+            pass
+    import dataclasses
+    return dataclasses.asdict(engine_pinbar_config) if engine_pinbar_config else {}
+
+
+async def get_feishu_enabled(repo):
+    """从数据库读取飞书推送启用状态"""
+    feishu_enabled_val = await repo.get_secret("feishu_enabled")
+    return feishu_enabled_val.lower() == "true" if feishu_enabled_val else False
+
+
 @app.get("/api/config")
 async def get_config(request: Request):
     engine = request.app.state.engine
     repo = engine.repo
+
+    # 从数据库读取 system_enabled
+    system_enabled_val = await repo.get_secret("system_enabled")
+    system_enabled = system_enabled_val.lower() == "true" if system_enabled_val else True
+
+    # 从数据库读取活跃币种
+    active_symbols_json = await repo.get_secret("active_symbols")
+    active_symbols = json.loads(active_symbols_json) if active_symbols_json else []
+
+    # 从数据库读取监控周期配置
+    monitor_intervals_json = await repo.get_secret("monitor_intervals")
+    monitor_intervals = {}
+    if monitor_intervals_json:
+        try:
+            intervals_data = json.loads(monitor_intervals_json)
+            if isinstance(intervals_data, dict):
+                from core.entities import IntervalConfig
+                monitor_intervals = {
+                    k: IntervalConfig(**v) if isinstance(v, dict) else IntervalConfig()
+                    for k, v in intervals_data.items()
+                }
+        except json.JSONDecodeError:
+            pass
 
     # 真实情况下需查 DB 看 Secret 有没有
     wecom_enabled_val = await repo.get_secret("wecom_enabled")
@@ -658,35 +710,56 @@ async def get_config(request: Request):
             "max_leverage": engine.max_leverage,
         }
 
-    import dataclasses
-
-    return {
-        "system_enabled": engine.system_enabled,
-        "active_symbols": engine.active_symbols,
-        "monitor_intervals": {
-            k: dataclasses.asdict(v) for k, v in engine.monitor_intervals.items()
-        }
-        if engine.monitor_intervals
-        else {},
-        "risk_config": risk_config,
-        "scoring_weights": {
+    # 从数据库读取评分权重配置
+    scoring_config_json = await repo.get_secret("scoring_config")
+    if scoring_config_json:
+        try:
+            scoring_config_data = json.loads(scoring_config_json)
+            scoring_weights = {
+                "w_shape": scoring_config_data.get("w_shape", 0.4),
+                "w_trend": scoring_config_data.get("w_trend", 0.3),
+                "w_vol": scoring_config_data.get("w_vol", 0.3),
+            }
+        except json.JSONDecodeError:
+            scoring_weights = {
+                "w_shape": engine.weights.w_shape,
+                "w_trend": engine.weights.w_trend,
+                "w_vol": engine.weights.w_vol,
+            }
+    else:
+        scoring_weights = {
             "w_shape": engine.weights.w_shape,
             "w_trend": engine.weights.w_trend,
             "w_vol": engine.weights.w_vol,
-        },
-        "exchange_settings": {"has_binance_key": True},
+        }
+
+    import dataclasses
+
+    # 检查是否有 Binance API 密钥
+    has_binance_key = bool(await repo.get_secret("binance_api_key"))
+
+    return {
+        "system_enabled": system_enabled,
+        "active_symbols": active_symbols,
+        "monitor_intervals": {
+            k: dataclasses.asdict(v) for k, v in monitor_intervals.items()
+        }
+        if monitor_intervals
+        else {},
+        "risk_config": risk_config,
+        "scoring_weights": scoring_weights,
+        "exchange_settings": {"has_binance_key": has_binance_key},
         "webhook_settings": {
             "global_push_enabled": global_push_enabled,
-            "feishu_enabled": True,  # You might want to get this from DB too, but adapting contract for now
+            "feishu_enabled": await get_feishu_enabled(repo),
             "wecom_enabled": wecom_enabled,
-            "has_feishu_secret": True,  # Mock logic based on contract
-            "has_wecom_secret": bool(await repo.get_secret("wecom_secret")),
+            "has_feishu_secret": bool(await repo.get_secret("feishu_webhook_url")),
+            "has_wecom_secret": bool(await repo.get_secret("wecom_webhook_url")),
         },
-        "pinbar_config": dataclasses.asdict(engine.pinbar_config)
-        if engine.pinbar_config
-        else {},
+        "pinbar_config": await get_pinbar_config_from_db(repo, engine.pinbar_config),
         "auto_order_status": "OFF",
     }
+
 
 
 @app.put("/api/config")
@@ -1093,10 +1166,17 @@ async def update_scoring_config_new(request: Request, req: ScoringConfigReq):
     try:
         from domain.strategy.scoring_config import ScoringConfig as ScoringConfigEntity
         engine.scoring_config = ScoringConfigEntity(**new_data)
+        # 同时更新 weights 引擎（策略实际使用的是 engine.weights）
+        engine.weights = ScoringWeights(
+            w_shape=new_data.get("w_shape", 0.4),
+            w_trend=new_data.get("w_trend", 0.3),
+            w_vol=new_data.get("w_vol", 0.3)
+        )
     except ValueError as e:
         # 如果验证失败，回滚并使用默认配置
         logger.error(f"配置验证失败：{e}")
         engine.scoring_config = ScoringConfigEntity()
+        engine.weights = ScoringWeights(w_shape=0.4, w_trend=0.3, w_vol=0.3)
 
     return {
         "status": "success",
@@ -1398,6 +1478,45 @@ async def update_push_config(request: Request, req: PushConfigReq):
 # ==========================================
 # 7. 交易所配置管理 (Exchange Config)
 # ==========================================
+
+@app.post("/api/push/test")
+async def test_push_notification(request: Request, channel: str = "wecom"):
+    """
+    测试推送通知
+    :param channel: 推送通道 (wecom, feishu, telegram)
+    """
+    repo = request.app.state.repo
+    test_message = (
+        f"**🧪 测试推送消息**\n\n"
+        f"- 通道：{channel}\n"
+        f"- 时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"- 状态：这是一条测试消息\n\n"
+        f"> 如果您收到此消息，说明推送配置正确。"
+    )
+
+    try:
+        if channel == "wecom":
+            from infrastructure.notify.wecom import WeComNotifier
+            wecom_notifier = WeComNotifier(repo)
+            await wecom_notifier.send_markdown(test_message)
+            return {"status": "success", "message": "已发送测试消息到企业微信"}
+        elif channel == "feishu":
+            from infrastructure.notify.feishu import FeishuNotifier
+            feishu_notifier = FeishuNotifier(repo)
+            await feishu_notifier.send_markdown(test_message)
+            return {"status": "success", "message": "已发送测试消息到飞书"}
+        elif channel == "telegram":
+            from infrastructure.notify.telegram import TelegramNotifier
+            telegram_notifier = TelegramNotifier(repo)
+            await telegram_notifier.send_markdown(test_message)
+            return {"status": "success", "message": "已发送测试消息到 Telegram"}
+        else:
+            return {"status": "error", "message": f"未知的推送通道：{channel}"}
+    except Exception as e:
+        logger.error(f"测试推送失败：{e}")
+        return {"status": "error", "message": f"发送失败：{str(e)}"}
+
+
 class ExchangeConfigReq(BaseModel):
     """交易所配置更新请求体"""
     binance_api_key: Optional[str] = Field(None, min_length=1)
@@ -1461,7 +1580,7 @@ from domain.services.config_service import ConfigValidationError
 async def export_config(request: Request):
     """
     导出配置为 YAML 文件
-    敏感字段（binance_api_key/secret）会被置空
+    敏感字段（binance_api_key、binance_api_secret、feishu_webhook_url、wecom_webhook_url）会被置空
     """
     repo = request.app.state.repo
     config_service = ConfigService(repo)
@@ -1501,6 +1620,7 @@ async def import_config(
     """
     从 YAML 导入配置
     支持文件上传或直接传入 yaml_content
+    支持导入所有配置项，包括 binance_api_key、binance_api_secret、feishu_webhook_url、wecom_webhook_url
     """
     repo = request.app.state.repo
     engine = request.app.state.engine

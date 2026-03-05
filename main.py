@@ -5,6 +5,7 @@
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 import json
 
@@ -33,9 +34,29 @@ from application.monitor_engine import CryptoRadarEngine
 from web.api import app
 
 # 设置全局纯净日志格式
+# LOG_DIR: Docker 中设置为 /app/logs，本地默认为 logs 目录（如果存在）否则使用根目录
+LOG_DIR = os.getenv("LOG_DIR")
+if LOG_DIR is None:
+    # 本地运行：检查 logs 目录是否存在，否则使用当前目录
+    LOG_DIR = "logs" if os.path.isdir("logs") else "."
+os.makedirs(LOG_DIR, exist_ok=True)
+
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(),  # 输出到控制台
+        logging.FileHandler(os.path.join(LOG_DIR, "backend.log"), encoding="utf-8")  # 输出到文件
+    ]
 )
+
+# 数据库路径配置 - 支持 Docker 部署（全局作用域）
+# DB_DIR: Docker 中设置为 /app/data，本地默认使用当前目录（radar.db 在根目录）
+DB_DIR = os.getenv("DB_DIR")
+if DB_DIR is None:
+    # 本地运行：直接使用当前目录
+    DB_DIR = "."
+DB_PATH = os.path.join(DB_DIR, "radar.db")
 
 # 保存挂载后台任务的对象以便控制
 engine_task = None
@@ -57,7 +78,7 @@ def assemble_engine() -> CryptoRadarEngine:
         api_secret="your_readonly_binance_api_secret",
     )
 
-    repo = SQLiteRepo("radar.db")
+    repo = SQLiteRepo(DB_PATH)
 
     # 实例化推流发送阵列与组合广播器
     feishu = FeishuNotifier(repo=repo)
@@ -180,7 +201,7 @@ async def lifespan(fastapi_app: FastAPI):
     # 实例化 K 线图表数据聚合服务
     from application.chart_service import ChartService
 
-    chart_service = ChartService(kline_fetcher=kline_fetcher, db_path="radar.db")
+    chart_service = ChartService(kline_fetcher=kline_fetcher, db_path=DB_PATH)
     fastapi_app.state.chart_service = chart_service
 
     # 不阻塞地在后台事件循环中拉起监察大循环

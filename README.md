@@ -4,7 +4,7 @@
 ![Tech Stack](https://img.shields.io/badge/tech-Python%20%7C%20FastAPI%20%7C%20React-blue)
 ![License](https://img.shields.io/badge/policy-Zero%20Execution-red)
 
-`monitor` 是一款专为加密货币交易者设计的、采用 Apple 极简主义设计风格的全栈监控与信号雷达系统。本系统基于“纯信号监测”原则，通过高频数据处理、多重时间框架（MTF）校验及动态权重评分逻辑，为交易决策提供精准的只读辅助。
+`monitor` 是一款专为加密货币交易者设计的、采用 Apple 极简主义设计风格的全栈监控与信号雷达系统。本系统基于"纯信号监测"原则，通过高频数据处理、多重时间框架（MTF）校验及动态权重评分逻辑，为交易决策提供精准的只读辅助。
 
 ---
 
@@ -45,7 +45,7 @@
 - **Web 框架**：FastAPI (异步高性能)
 - **设计模式**：Clean Architecture / DDD (领域驱动设计)
 - **数据持久化**：SQLite (轻量级本地存储)
-- **外部集成**：Binance API (K线、账户、持仓)
+- **外部集成**：Binance API (K 线、账户、持仓)
 
 ### 前端 (Command Center)
 - **框架**：React 18 + TypeScript
@@ -56,6 +56,36 @@
 ---
 
 ## 快速开始
+
+### 方式一：Docker 部署（推荐）
+
+```bash
+# 1. 确保宿主机目录存在
+mkdir -p /Users/jiangwei/Documents/docker/monitor/{data,logs,config}
+
+# 2. 构建并启动
+cd monitor
+docker-compose up --build -d
+
+# 3. 查看日志
+docker logs -f cryptoradar-backend
+
+# 4. 访问应用
+# 前端：http://localhost:5174
+# 后端 API：http://localhost:8000
+# API 文档：http://localhost:8000/docs
+
+# 5. 停止服务
+docker-compose down
+```
+
+所有数据持久化到宿主机目录 `/Users/jiangwei/Documents/docker/monitor/`：
+- `data/radar.db` - SQLite 数据库
+- `logs/backend.log` - 应用日志
+- `config/` - 配置文件导入/导出
+- `.env` - 环境变量
+
+### 方式二：本地开发环境
 
 ### 准备工作
 请确保已安装 Python 3.10+ 和 Node.js 18+。
@@ -69,8 +99,8 @@ cd monitor
 python -m venv venv
 source venv/bin/activate  # macOS/Linux
 
-# 安装依赖 (暂无 requirements.txt 时可手动安装核心库)
-pip install fastapi uvicorn pydantic httpx sqlalchemy aiosqlite
+# 安装依赖
+pip install -r requirements.txt
 ```
 
 ### 步骤 2：前端环境配置
@@ -99,6 +129,25 @@ monitor/
 ├── scripts/            # 维护脚本与回测测试
 └── docs/               # 系统设计文档与 API 契约
 ```
+
+---
+
+## Docker 部署
+
+详细 Docker 部署说明请参考 [DOCKER.md](DOCKER.md)
+
+### 配置导入/导出
+
+```bash
+# 导出配置为 YAML
+curl -X POST http://localhost:8000/api/config/export
+
+# 从 YAML 导入配置
+curl -X POST http://localhost:8000/api/config/import \
+  -F "file=@config/exported_config_*.yaml"
+```
+
+**注意**：导出配置时，敏感信息（币安 API Key/Secret、飞书/企微 Webhook URL）会被置空，确保配置文件可以安全分享。
 
 ---
 

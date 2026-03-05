@@ -383,7 +383,12 @@ export default function App() {
                 availableSymbols={AVAILABLE_SYMBOLS}
                 tableColumns={tableColumns}
                 onTableColumnsChange={setTableColumns}
-                onSignalsChange={() => {}}
+                onSignalsChange={(newSignals) => {
+                  // 手动更新信号列表用于删除后的即时响应
+                  // 实际数据会在下一次轮询时与后端同步
+                  const event = new CustomEvent("local-signals-update", { detail: newSignals });
+                  window.dispatchEvent(event);
+                }}
                 onRefresh={refreshSignals}
               />
             </TabsContent>

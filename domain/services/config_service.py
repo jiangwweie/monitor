@@ -53,6 +53,10 @@ class ConfigService:
         获取系统配置摘要
         返回系统启用状态、活跃币种、监控周期等基础配置
         """
+        # 从数据库读取 system_enabled
+        system_enabled_val = await self.repo.get_secret("system_enabled")
+        system_enabled = system_enabled_val.lower() == "true" if system_enabled_val else True
+
         # 获取活跃币种
         active_symbols_json = await self.repo.get_secret("active_symbols")
         active_symbols = json.loads(active_symbols_json) if active_symbols_json else []
@@ -72,7 +76,7 @@ class ConfigService:
                 pass
 
         return {
-            "system_enabled": True,  # 默认启用，实际状态由引擎控制
+            "system_enabled": system_enabled,
             "active_symbols": active_symbols,
             "monitor_intervals": monitor_intervals,
         }
@@ -307,6 +311,12 @@ class ConfigService:
         :param config: 配置字典，可包含 system_enabled, active_symbols, monitor_intervals
         :return: 更新后的配置
         """
+        if "system_enabled" in config and config["system_enabled"] is not None:
+            await self.repo.set_secret(
+                "system_enabled",
+                str(config["system_enabled"]).lower()
+            )
+
         if "active_symbols" in config and config["active_symbols"] is not None:
             await self.repo.set_secret("active_symbols", json.dumps(config["active_symbols"]))
 
@@ -534,7 +544,7 @@ class ConfigService:
     async def get_all_config_for_export(self) -> Dict[str, Any]:
         """
         获取所有配置用于导出
-        敏感字段（API Key/Secret）会被置空
+        敏感字段（API Key/Secret、Webhook URL）会被置空
         导出结构与导入结构对应
 
         :return: 所有配置的字典
@@ -551,6 +561,7 @@ class ConfigService:
         exchange_config = await self.get_exchange_config()
 
         # 组织导出结构（与导入结构对应）
+        # 安全：排除 4 项敏感信息 - binance_api_key, binance_api_secret, feishu_webhook_url, wecom_webhook_url
         return {
             "# CryptoRadar 配置导出": f"导出时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "export_timestamp": datetime.now().isoformat(),
@@ -559,6 +570,7 @@ class ConfigService:
                 "binance_api_key": "",  # 安全：置空
                 "binance_api_secret": "",  # 安全：置空
                 "use_testnet": exchange_config.get("use_testnet", False),
+                "api_permissions": exchange_config.get("api_permissions"),
             },
             "monitor_config": {
                 "active_symbols": system_config.get("active_symbols", []),
@@ -566,12 +578,18 @@ class ConfigService:
             },
             "pinbar_config": pinbar_config,
             "risk_config": risk_config,
-            "scoring_weights": {
-                "w_shape": scoring_config.get("w_shape", 0.4),
-                "w_trend": scoring_config.get("w_trend", 0.3),
-                "w_vol": scoring_config.get("w_vol", 0.3),
+            "scoring_config": scoring_config,  # 导出完整打分配置
+            "push_config": {
+                # 安全：webhook URL 置空，仅导出启用状态和开关
+                "global_push_enabled": push_config.get("global_push_enabled", True),
+                "feishu_enabled": push_config.get("feishu_enabled", False),
+                "feishu_webhook_url": "",  # 安全：置空
+                "wecom_enabled": push_config.get("wecom_enabled", False),
+                "wecom_webhook_url": "",  # 安全：置空
+                "telegram_enabled": push_config.get("telegram_enabled", False),
+                "telegram_bot_token": "",  # 安全：置空
+                "telegram_chat_id": "",  # 安全：置空
             },
-            "push_config": push_config,
         }
 
     def _validate_config(self, config: Dict[str, Any]) -> None:
@@ -590,7 +608,8 @@ class ConfigService:
             raise ConfigValidationError("监控配置：至少需要保留一个监控级别")
 
         # === 2. 校验打分权重总和为 1.0 ===
-        scoring_weights = config.get("scoring_weights", {})
+        # 兼容 scoring_config（新格式）和 scoring_weights（旧格式）
+        scoring_weights = config.get("scoring_config") or config.get("scoring_weights", {})
         if scoring_weights:
             w_shape = float(scoring_weights.get("w_shape", 0))
             w_trend = float(scoring_weights.get("w_trend", 0))
@@ -653,7 +672,7 @@ class ConfigService:
     async def import_config_from_yaml(self, config: Dict[str, Any], engine: Any = None) -> Dict[str, Any]:
         """
         从 YAML 配置字典导入配置
-        包含完整的校验逻辑
+        包含完整的校验逻辑，支持导入所有配置项（包括敏感信息）
 
         :param config: 解析后的 YAML 配置字典
         :param engine: 引擎实例，用于更新内存配置
@@ -676,7 +695,7 @@ class ConfigService:
                 await self.repo.set_secret("monitor_intervals", json.dumps(monitor_intervals))
             result["monitor_config"] = monitor_config
 
-        # === 导入推送配置 ===
+        # === 导入推送配置（支持 webhook URL）===
         push_config = config.get("push_config", {})
         if push_config:
             await self.update_push_config(push_config)
@@ -688,9 +707,15 @@ class ConfigService:
             await self.update_pinbar_config(pinbar_config)
             result["pinbar_config"] = pinbar_config
 
-        # === 导入打分配置 ===
-        scoring_weights = config.get("scoring_weights", {})
-        if scoring_weights:
+        # === 导入打分配置（兼容 scoring_config 和 scoring_weights 两种格式）===
+        scoring_config = config.get("scoring_config")
+        scoring_weights = config.get("scoring_weights")
+        if scoring_config:
+            # 新格式：完整的 scoring_config
+            await self.update_scoring_config(scoring_config)
+            result["scoring_config"] = scoring_config
+        elif scoring_weights:
+            # 旧格式：仅权重
             await self.update_scoring_config(scoring_weights)
             result["scoring_weights"] = scoring_weights
 
@@ -700,15 +725,23 @@ class ConfigService:
             await self.update_risk_config(risk_config)
             result["risk_config"] = risk_config
 
-        # === 导入交易所配置（安全：跳过 API 密钥）===
+        # === 导入交易所配置（支持导入 API 密钥）===
         exchange_settings = config.get("exchange_settings", {})
         if exchange_settings:
-            # 安全考虑：不导入 API 密钥，仅导入其他设置
-            exchange = {k: v for k, v in exchange_settings.items() 
-                       if k not in ["binance_api_key", "binance_api_secret"]}
+            # 支持导入所有字段，包括 API 密钥（如果 YAML 中存在且非空）
+            exchange = {}
+            for k, v in exchange_settings.items():
+                # 跳过空值的敏感字段（导出的配置会置空这些字段）
+                if k in ["binance_api_key", "binance_api_secret"] and not v:
+                    continue
+                exchange[k] = v
             if exchange:
                 await self.update_exchange_config(exchange)
-            result["exchange_settings"] = {"note": "API 密钥已跳过导入，请手动配置"}
+            # 记录导入结果
+            if exchange_settings.get("binance_api_key"):
+                result["exchange_settings"] = {"note": "API 密钥已导入"}
+            elif exchange:
+                result["exchange_settings"] = {"note": "已导入非敏感配置项"}
 
         # === 更新引擎内存配置 ===
         if engine:
@@ -730,7 +763,10 @@ class ConfigService:
                     engine.max_leverage = risk_config["max_leverage"]
             if pinbar_config:
                 engine.pinbar_config = PinbarConfig(**pinbar_config)
-            if scoring_weights:
+            # 处理打分配置更新引擎
+            if scoring_config:
+                engine.scoring_config = ScoringConfig(**scoring_config)
+            elif scoring_weights:
                 engine.scoring_config = ScoringConfig(**scoring_weights)
 
         logger.info(f"配置导入完成：{list(result.keys())}")

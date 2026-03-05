@@ -221,6 +221,13 @@ class SQLiteRepo(IRepository):
             await db.commit()
             return cursor.rowcount
 
+    async def clear_all_signals(self) -> int:
+        """清空所有信号记录"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("DELETE FROM signals")
+            await db.commit()
+            return cursor.rowcount
+
     async def cleanup_old_signals(self, days: int = 7) -> int:
         """一键清理 N 天前数据记录"""
         limit_time = int((time.time() - days * 86400) * 1000)

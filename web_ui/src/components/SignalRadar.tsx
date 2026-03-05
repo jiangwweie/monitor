@@ -164,8 +164,8 @@ export function SignalRadar({
         body: JSON.stringify({ signal_ids: idsToDelete }),
       });
       if (res.ok) {
-        const idsSet = new Set(idsToDelete);
-        onSignalsChange(signals.filter((s, i) => !idsSet.has(getSignalId(s, i))));
+        // 删除成功后立即刷新列表
+        await onRefresh?.();
         const newSelected = new Set(selectedSignals);
         idsToDelete.forEach((id) => newSelected.delete(id));
         setSelectedSignals(newSelected);
@@ -175,6 +175,24 @@ export function SignalRadar({
       }
     } catch (error) {
       toast.error("删除信号失败", { description: "请检查网络或后端服务状态" });
+    }
+  };
+
+  const handleClearAllSignals = async () => {
+    try {
+      const res = await fetch("http://localhost:8000/api/signals/clear", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        await onRefresh?.();
+        setSelectedSignals(new Set());
+        toast.success("已清空所有信号记录");
+      } else {
+        throw new Error("Clear failed");
+      }
+    } catch (error) {
+      toast.error("清空信号失败", { description: "请检查网络或后端服务状态" });
     }
   };
 
@@ -342,7 +360,7 @@ export function SignalRadar({
               <Button variant="outline" size="sm" onClick={() => setIsHistoryScanOpen(true)} className="border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/50 h-8">
                 <ScanSearch className="w-4 h-4 mr-2" /> 历史信号检查
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => onSignalsChange([])} className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 h-8">
+              <Button variant="ghost" size="sm" onClick={handleClearAllSignals} className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 h-8">
                 <Trash2 className="w-4 h-4 mr-2" /> 清空记录
               </Button>
             </div>

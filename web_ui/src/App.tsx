@@ -113,12 +113,14 @@ export default function App() {
   // 信号列表轮询 - 60 秒间隔
   const {
     data: signals,
+    refresh: refreshSignals,
   } = usePolling(
     async () => {
       const res = await fetch(`${API_BASE}/api/signals`);
       if (!res.ok) throw new Error("Signals fetch failed");
-      const data = await res.json();
-      return Array.isArray(data?.items) ? data.items : [];
+      const resJson = await res.json();
+      // API 返回格式：{ status: "success", data: { items: [...], total: 888 }, meta: {...} }
+      return Array.isArray(resJson?.data?.items) ? resJson.data.items : [];
     },
     {
       interval: 60000,
@@ -382,6 +384,7 @@ export default function App() {
                 tableColumns={tableColumns}
                 onTableColumnsChange={setTableColumns}
                 onSignalsChange={() => {}}
+                onRefresh={refreshSignals}
               />
             </TabsContent>
 

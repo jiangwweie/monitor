@@ -412,6 +412,14 @@ async def submit_history_check(request: Request, req: HistoryCheckReq = Body(...
 async def get_history_check_status(request: Request, task_id: str):
     """
     轮询历史扫描任务的执行状态。
+
+    返回字段说明:
+    - task_id: 任务 ID
+    - status: 任务状态 (running/completed/failed)
+    - progress: 进度 (0-100)
+    - message: 当前状态描述
+    - result: 扫描结果 (完成后返回)
+    - config: 扫描配置 (symbol, interval, start_date, end_date)
     """
     scanner = getattr(request.app.state, "history_scanner", None)
 
@@ -428,6 +436,10 @@ async def get_history_check_status(request: Request, task_id: str):
         "progress": task.progress,
         "message": task.message,
     }
+
+    # 添加 config 字段
+    if task.config is not None:
+        response["config"] = task.config
 
     if task.result is not None:
         response["result"] = task.result

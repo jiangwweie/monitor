@@ -419,21 +419,12 @@ class ConfigService:
         wecom_enabled = wecom_enabled_val.lower() == "true" if wecom_enabled_val else False
         wecom_webhook_url = await self.repo.get_secret("wecom_webhook_url")
 
-        # 获取 Telegram 配置
-        telegram_enabled_val = await self.repo.get_secret("telegram_enabled")
-        telegram_enabled = telegram_enabled_val.lower() == "true" if telegram_enabled_val else False
-        telegram_bot_token = await self.repo.get_secret("telegram_bot_token")
-        telegram_chat_id = await self.repo.get_secret("telegram_chat_id")
-
         return {
             "global_push_enabled": global_push_enabled,
             "feishu_enabled": feishu_enabled,
             "feishu_webhook_url": feishu_webhook_url if feishu_webhook_url else "",
             "wecom_enabled": wecom_enabled,
             "wecom_webhook_url": wecom_webhook_url if wecom_webhook_url else "",
-            "telegram_enabled": telegram_enabled,
-            "telegram_bot_token": telegram_bot_token if telegram_bot_token else "",
-            "telegram_chat_id": telegram_chat_id if telegram_chat_id else "",
         }
 
     async def update_push_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -466,18 +457,6 @@ class ConfigService:
 
         if "wecom_webhook_url" in config and config["wecom_webhook_url"] is not None:
             await self.repo.set_secret("wecom_webhook_url", config["wecom_webhook_url"])
-
-        if "telegram_enabled" in config and config["telegram_enabled"] is not None:
-            await self.repo.set_secret(
-                "telegram_enabled",
-                str(config["telegram_enabled"]).lower()
-            )
-
-        if "telegram_bot_token" in config and config["telegram_bot_token"] is not None:
-            await self.repo.set_secret("telegram_bot_token", config["telegram_bot_token"])
-
-        if "telegram_chat_id" in config and config["telegram_chat_id"] is not None:
-            await self.repo.set_secret("telegram_chat_id", config["telegram_chat_id"])
 
         return await self.get_push_config()
 
@@ -586,9 +565,7 @@ class ConfigService:
                 "feishu_webhook_url": "",  # 安全：置空
                 "wecom_enabled": push_config.get("wecom_enabled", False),
                 "wecom_webhook_url": "",  # 安全：置空
-                "telegram_enabled": push_config.get("telegram_enabled", False),
-                "telegram_bot_token": "",  # 安全：置空
-                "telegram_chat_id": "",  # 安全：置空
+
             },
         }
 

@@ -17,7 +17,7 @@ def simple_encrypt(plain_text: str) -> str:
     for i, c in enumerate(plain_text):
         key_c = SECRET_XOR_KEY[i % len(SECRET_XOR_KEY)]
         encoded.append(chr(ord(c) ^ ord(key_c)))
-    
+
     # 编码成 Base64 字符串
     return base64.b64encode("".join(encoded).encode('utf-8')).decode('utf-8')
 

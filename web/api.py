@@ -616,6 +616,7 @@ class ExchangeSettingsConfig(BaseModel):
 
 
 class WebhookSettingsConfig(BaseModel):
+    # 已废弃：推送配置请通过 .env 文件配置
     global_push_enabled: Optional[bool] = None
     feishu_enabled: Optional[bool] = None
     feishu_secret: Optional[str] = None
@@ -731,11 +732,6 @@ async def get_pinbar_config_from_db(repo, engine_pinbar_config):
     return dataclasses.asdict(engine_pinbar_config) if engine_pinbar_config else {}
 
 
-async def get_feishu_enabled(repo):
-    """从数据库读取飞书推送启用状态"""
-    feishu_enabled_val = await repo.get_secret("feishu_enabled")
-    return feishu_enabled_val.lower() == "true" if feishu_enabled_val else False
-
 
 @app.get("/api/config")
 async def get_config(request: Request):
@@ -765,14 +761,7 @@ async def get_config(request: Request):
         except json.JSONDecodeError:
             pass
 
-    # 真实情况下需查 DB 看 Secret 有没有
-    wecom_enabled_val = await repo.get_secret("wecom_enabled")
-    wecom_enabled = wecom_enabled_val.lower() == "true" if wecom_enabled_val else False
 
-    global_push_enabled_val = await repo.get_secret("global_push_enabled")
-    global_push_enabled = (
-        global_push_enabled_val.lower() == "true" if global_push_enabled_val else True
-    )  # 默认开启
 
     # 从数据库读取风险配置
     risk_config_json = await repo.get_secret("risk_config")
@@ -822,8 +811,12 @@ async def get_config(request: Request):
 
     import dataclasses
 
-    # 检查是否有 Binance API 密钥
-    has_binance_key = bool(await repo.get_secret("binance_api_key"))
+
+    # 从环境变量读取推送配置（不再从数据库读取私密配置）
+    import os
+    global_push_enabled = os.getenv("GLOBAL_PUSH_ENABLED", "true").lower() != "false"
+    feishu_enabled = os.getenv("FEISHU_ENABLED", "false").lower() == "true"
+    wecom_enabled = os.getenv("WECOM_ENABLED", "false").lower() == "true"
 
     return {
         "system_enabled": system_enabled,
@@ -835,16 +828,14 @@ async def get_config(request: Request):
         else {},
         "risk_config": risk_config,
         "scoring_weights": scoring_weights,
-        "exchange_settings": {"has_binance_key": has_binance_key},
-        "webhook_settings": {
-            "global_push_enabled": global_push_enabled,
-            "feishu_enabled": await get_feishu_enabled(repo),
-            "wecom_enabled": wecom_enabled,
-            "has_feishu_secret": bool(await repo.get_secret("feishu_webhook_url")),
-            "has_wecom_secret": bool(await repo.get_secret("wecom_webhook_url")),
-        },
         "pinbar_config": await get_pinbar_config_from_db(repo, engine.pinbar_config),
         "auto_order_status": "OFF",
+        "push_config": {
+            "global_enabled": global_push_enabled,
+            "feishu_enabled": feishu_enabled,
+            "wecom_enabled": wecom_enabled,
+            # 注意：API Key 和 Webhook URL 不再通过 API 返回
+        },
     }
 
 
@@ -911,17 +902,7 @@ async def update_config(request: Request, req: ConfigUpdateReq = Body(...)):
             }),
         )
 
-    if req.exchange_settings:
-        if req.exchange_settings.binance_api_key:
-            engine.account_reader.api_key = req.exchange_settings.binance_api_key
-            await repo.set_secret(
-                "binance_api_key", req.exchange_settings.binance_api_key
-            )
-        if req.exchange_settings.binance_api_secret:
-            engine.account_reader.api_secret = req.exchange_settings.binance_api_secret
-            await repo.set_secret(
-                "binance_api_secret", req.exchange_settings.binance_api_secret
-            )
+    # 注意：exchange_settings 已废弃，API Key 请通过 .env 文件配置
 
     # 安全防线：忽视所有对 auto_order_status 的修改，保持后端处于零执行的只读模式
     if req.auto_order_status is not None:
@@ -929,35 +910,7 @@ async def update_config(request: Request, req: ConfigUpdateReq = Body(...)):
             f"检测到试图修改 auto_order_status 为 {req.auto_order_status}，后端安全锁已拒绝该操作。"
         )
 
-    # 涉及到数据库加密保存的落盘动作
-    if req.webhook_settings:
-        if req.webhook_settings.global_push_enabled is not None:
-            await repo.set_secret(
-                "global_push_enabled",
-                str(req.webhook_settings.global_push_enabled).lower(),
-            )
-
-        if req.webhook_settings.feishu_enabled is not None:
-            await repo.set_secret(
-                "feishu_enabled", str(req.webhook_settings.feishu_enabled).lower()
-            )
-
-        if req.webhook_settings.feishu_secret is not None:
-            # 兼容前端命名，feishu_secret 对应 backend 的 webhook_url
-            await repo.set_secret(
-                "feishu_webhook_url", req.webhook_settings.feishu_secret
-            )
-
-        if req.webhook_settings.wecom_enabled is not None:
-            await repo.set_secret(
-                "wecom_enabled", str(req.webhook_settings.wecom_enabled).lower()
-            )
-
-        if req.webhook_settings.wecom_secret is not None:
-            # 兼容前端命名，wecom_secret 对应 backend 的 webhook_url
-            await repo.set_secret(
-                "wecom_webhook_url", req.webhook_settings.wecom_secret
-            )
+    # 注意：webhook_settings 已废弃，推送配置请通过 .env 文件配置
 
     return {"status": "success", "message": "Configuration hot-reloaded successfully"}
 
@@ -1338,49 +1291,8 @@ async def update_pinbar_config(request: Request, req: PinbarConfigReq):
         raise HTTPException(status_code=500, detail=f"Pinbar 配置更新失败：{str(e)}")
 
 
-@app.get("/api/config/webhook")
-async def get_webhook_config(request: Request):
-    """
-    获取 Webhook 推送配置
-    返回各推送通道的启用状态和密钥配置
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        data = await config_service.get_webhook_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"Webhook 配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"Webhook 配置获取失败：{str(e)}")
 
 
-class WebhookConfigReq(BaseModel):
-    """Webhook 配置更新请求体"""
-    global_push_enabled: Optional[bool] = None
-    feishu_enabled: Optional[bool] = None
-    feishu_secret: Optional[str] = None
-    wecom_enabled: Optional[bool] = None
-    wecom_secret: Optional[str] = None
-
-
-@app.put("/api/config/webhook")
-async def update_webhook_config(request: Request, req: WebhookConfigReq):
-    """
-    更新 Webhook 配置
-    支持热更新各推送通道的启用状态和密钥
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    update_data = req.model_dump(exclude_unset=True)
-
-    try:
-        data = await config_service.update_webhook_config(update_data)
-        return _create_response(data, message="Webhook 配置已热更新")
-    except Exception as e:
-        logger.error(f"Webhook 配置更新失败：{e}")
-        raise HTTPException(status_code=500, detail=f"Webhook 配置更新失败：{str(e)}")
 
 
 # ==========================================
@@ -1515,51 +1427,17 @@ async def preview_scoring_score(request: Request, req: ScorePreviewRequest = Bod
 # 6. 推送配置管理 (Push Config)
 # ==========================================
 class PushConfigReq(BaseModel):
-    """推送配置更新请求体"""
+    """推送配置更新请求体（已废弃：推送配置请通过 .env 文件设置）"""
+    # 已废弃：所有推送配置请通过 .env 文件设置
     global_push_enabled: Optional[bool] = None
     feishu_enabled: Optional[bool] = None
     feishu_webhook_url: Optional[str] = None
     wecom_enabled: Optional[bool] = None
     wecom_webhook_url: Optional[str] = None
-    telegram_enabled: Optional[bool] = None
-    telegram_bot_token: Optional[str] = None
-    telegram_chat_id: Optional[str] = None
 
 
-@app.get("/api/config/push")
-async def get_push_config(request: Request):
-    """
-    获取推送配置
-    返回各推送通道（飞书、企业微信、Telegram）的启用状态和密钥配置
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        data = await config_service.get_push_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"推送配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"推送配置获取失败：{str(e)}")
 
 
-@app.put("/api/config/push")
-async def update_push_config(request: Request, req: PushConfigReq):
-    """
-    更新推送配置
-    支持热更新各推送通道的启用状态和密钥
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    update_data = req.model_dump(exclude_unset=True)
-
-    try:
-        data = await config_service.update_push_config(update_data)
-        return _create_response(data, message="推送配置已热更新")
-    except Exception as e:
-        logger.error(f"推送配置更新失败：{e}")
-        raise HTTPException(status_code=500, detail=f"推送配置更新失败：{str(e)}")
 
 
 # ==========================================
@@ -1570,56 +1448,11 @@ async def update_push_config(request: Request, req: PushConfigReq):
 async def test_push_notification(request: Request, channel: str = "wecom"):
     """
     测试推送通知
-    :param channel: 推送通道 (wecom, feishu, telegram)
+    :param channel: 推送通道 (wecom, feishu, all)
     """
-    repo = request.app.state.repo
-    # 使用与正式信号相同的格式模板，确保测试和正式推送一致
-    test_message = (
-        "**🧪 测试推送 · --分**\n"
-        "#TESTUSDT | 1h | 🟢 多\n"
-        "入场：`1000.0`\n"
-        "止损：`950.0`\n"
-        "目标：`1100.0`\n"
-        "杠杆：`10.0x`"
-    )
-
-    try:
-        if channel == "all":
-            # 同时发送到所有通道
-            from infrastructure.notify.feishu import FeishuNotifier
-            from infrastructure.notify.wecom import WeComNotifier
-            from infrastructure.notify.telegram import TelegramNotifier
-            
-            feishu = FeishuNotifier(repo)
-            wecom = WeComNotifier(repo)
-            telegram = TelegramNotifier(repo)
-            
-            await asyncio.gather(
-                feishu.send_markdown(test_message),
-                wecom.send_markdown(test_message),
-                telegram.send_markdown(test_message)
-            )
-            return {"status": "success", "message": "已发送测试消息到所有通道"}
-        elif channel == "wecom":
-            from infrastructure.notify.wecom import WeComNotifier
-            wecom_notifier = WeComNotifier(repo)
-            await wecom_notifier.send_markdown(test_message)
-            return {"status": "success", "message": "已发送测试消息到企业微信"}
-        elif channel == "feishu":
-            from infrastructure.notify.feishu import FeishuNotifier
-            feishu_notifier = FeishuNotifier(repo)
-            await feishu_notifier.send_markdown(test_message)
-            return {"status": "success", "message": "已发送测试消息到飞书"}
-        elif channel == "telegram":
-            from infrastructure.notify.telegram import TelegramNotifier
-            telegram_notifier = TelegramNotifier(repo)
-            await telegram_notifier.send_markdown(test_message)
-            return {"status": "success", "message": "已发送测试消息到 Telegram"}
-        else:
-            return {"status": "error", "message": f"未知的推送通道：{channel}"}
-    except Exception as e:
-        logger.error(f"测试推送失败：{e}")
-        return {"status": "error", "message": f"发送失败：{str(e)}"}
+    # 注意：推送配置已从环境变量读取，不再支持通过 API 测试
+    # 此接口仅用于测试连接性，实际推送请使用配置好的环境变量
+    return {"status": "info", "message": "推送配置已改为从 .env 文件读取，请查看日志确认推送状态"}
 
 
 class ExchangeConfigReq(BaseModel):
@@ -1629,47 +1462,8 @@ class ExchangeConfigReq(BaseModel):
     use_testnet: Optional[bool] = None
 
 
-@app.get("/api/config/exchange")
-async def get_exchange_config(request: Request):
-    """
-    获取交易所配置
-    返回 Binance API 密钥配置（密钥脱敏显示）
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        data = await config_service.get_exchange_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"交易所配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"交易所配置获取失败：{str(e)}")
 
 
-@app.put("/api/config/exchange")
-async def update_exchange_config(request: Request, req: ExchangeConfigReq):
-    """
-    更新交易所配置
-    支持热更新 Binance API 密钥
-    """
-    repo = request.app.state.repo
-    engine = request.app.state.engine
-    config_service = ConfigService(repo)
-
-    update_data = req.model_dump(exclude_unset=True)
-
-    # 更新引擎内存中的配置
-    if "binance_api_key" in update_data:
-        engine.account_reader.api_key = update_data["binance_api_key"]
-    if "binance_api_secret" in update_data:
-        engine.account_reader.api_secret = update_data["binance_api_secret"]
-
-    try:
-        data = await config_service.update_exchange_config(update_data)
-        return _create_response(data, message="交易所配置已热更新")
-    except Exception as e:
-        logger.error(f"交易所配置更新失败：{e}")
-        raise HTTPException(status_code=500, detail=f"交易所配置更新失败：{str(e)}")
 
 
 # ==========================================

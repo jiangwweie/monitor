@@ -14,8 +14,8 @@ import { PositionDetailModal } from "@/components/PositionDetailModal";
 
 const AVAILABLE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
 
-// API 基础 URL
-const API_BASE = "http://localhost:8000";
+// API 基础 URL - 从环境变量读取，默认 localhost:8000
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -37,10 +37,8 @@ export default function App() {
   const [loadingPositionDetail, setLoadingPositionDetail] = useState(false);
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
 
-  // 配置数据 - 仅初始加载
+  // 配置数据 - 仅初始加载（非私密配置）
   const [config, setConfig] = useState({
-    system_enabled: false,
-    global_push_enabled: true,
     symbols: "BTCUSDT,ETHUSDT",
     monitor_intervals: ["15m", "1h", "4h", "1d"],
     risk_pct: 2.0,
@@ -49,15 +47,6 @@ export default function App() {
     w_shape: 50,
     w_trend: 30,
     w_vol: 20,
-    feishu_enabled: false,
-    feishu_secret: "",
-    wecom_enabled: false,
-    wecom_secret: "",
-    has_secret: false,
-    has_wecom_secret: false,
-    binance_api_key: "",
-    binance_api_secret: "",
-    has_binance_key: false,
     body_max_ratio: 0.25,
     shadow_min_ratio: 2.5,
     volatility_atr_multiplier: 1.2,
@@ -141,8 +130,6 @@ export default function App() {
           const data = await configRes.json();
           setConfig((prev) => ({
             ...prev,
-            system_enabled: data.system_enabled ?? false,
-            global_push_enabled: data.global_push_enabled ?? true,
             symbols: Array.isArray(data.active_symbols)
               ? data.active_symbols.join(",")
               : prev.symbols,
@@ -153,11 +140,6 @@ export default function App() {
             w_shape: Math.round(parseFloat(data.scoring_weights?.w_shape || 0) * 100),
             w_trend: Math.round(parseFloat(data.scoring_weights?.w_trend || 0) * 100),
             w_vol: Math.round(parseFloat(data.scoring_weights?.w_vol || 0) * 100),
-            feishu_enabled: data.webhook_settings?.feishu_enabled ?? false,
-            wecom_enabled: data.webhook_settings?.wecom_enabled ?? false,
-            has_secret: data.webhook_settings?.has_secret ?? false,
-            has_wecom_secret: data.webhook_settings?.has_wecom_secret ?? false,
-            has_binance_key: data.exchange_settings?.has_binance_key ?? false,
             body_max_ratio: data.pinbar_config?.body_max_ratio ?? 0.25,
             shadow_min_ratio: data.pinbar_config?.shadow_min_ratio ?? 2.5,
             volatility_atr_multiplier: data.pinbar_config?.volatility_atr_multiplier ?? 1.2,

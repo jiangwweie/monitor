@@ -1,30 +1,44 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Database, Clock, Zap, ShieldCheck, Bell, Download } from "lucide-react";
+import { Clock, Zap, ShieldCheck, Download } from "lucide-react";
 
 import {
-  ExchangeTab,
   MonitorTab,
   PinbarTab,
   RiskTab,
-  PushTab,
   ImportExportTab,
 } from "./settings/index";
 
 interface SettingsProps {
-  config: any;
-  onConfigChange: (field: string, value: any) => void;
+  config: {
+    symbols: string;
+    monitor_intervals: string[];
+    body_max_ratio: number;
+    shadow_min_ratio: number;
+    volatility_atr_multiplier: number;
+    doji_threshold: number;
+    doji_shadow_bonus: number;
+    mtf_trend_filter_mode: string;
+    dynamic_sl_enabled: boolean;
+    dynamic_sl_base: number;
+    dynamic_sl_atr_multiplier: number;
+    risk_pct: number;
+    max_sl_dist: number;
+    max_leverage: number;
+    w_shape: number;
+    w_trend: number;
+    w_vol: number;
+  };
+  onConfigChange: (field: string, value: unknown) => void;
 }
 
 export function Settings({ config, onConfigChange }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState("exchange");
+  const [activeTab, setActiveTab] = useState("monitor");
 
   const tabs = [
-    { id: "exchange", label: "交易所", icon: Database },
     { id: "monitor", label: "监控", icon: Clock },
     { id: "pinbar", label: "Pinbar", icon: Zap },
     { id: "risk", label: "风控", icon: ShieldCheck },
-    { id: "push", label: "推送", icon: Bell },
     { id: "import", label: "导入导出", icon: Download },
   ];
 
@@ -44,12 +58,6 @@ export function Settings({ config, onConfigChange }: SettingsProps) {
           ))}
         </TabsList>
 
-        <TabsContent value="exchange">
-          <ExchangeTab
-            initialConfig={config}
-          />
-        </TabsContent>
-
         <TabsContent value="monitor">
           <MonitorTab
             initialConfig={config}
@@ -66,13 +74,6 @@ export function Settings({ config, onConfigChange }: SettingsProps) {
 
         <TabsContent value="risk">
           <RiskTab
-            initialConfig={config}
-            onConfigChange={onConfigChange}
-          />
-        </TabsContent>
-
-        <TabsContent value="push">
-          <PushTab
             initialConfig={config}
             onConfigChange={onConfigChange}
           />

@@ -7,7 +7,7 @@ import logging
 import asyncio
 import json
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import aiosqlite
 
@@ -97,6 +97,15 @@ class SQLiteRepo(IRepository):
                 await db.execute("ALTER TABLE signals ADD COLUMN is_shape_divergent BOOLEAN DEFAULT 0")
             except aiosqlite.OperationalError: pass
 
+            # 添加新字段：quality_tier, is_contrarian
+            try:
+                await db.execute("ALTER TABLE signals ADD COLUMN quality_tier TEXT DEFAULT 'B'")
+            except aiosqlite.OperationalError: pass
+
+            try:
+                await db.execute("ALTER TABLE signals ADD COLUMN is_contrarian BOOLEAN DEFAULT 0")
+            except aiosqlite.OperationalError: pass
+
             await db.commit()
             
     # ======== IRepository 实现 ========
@@ -108,8 +117,9 @@ class SQLiteRepo(IRepository):
                 INSERT INTO signals (
                     symbol, interval, direction, entry_price, stop_loss, take_profit_1,
                     timestamp, reason, sl_distance_pct, score, score_details,
-                    shadow_ratio, ema_distance, volatility_atr, source, is_shape_divergent, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    shadow_ratio, ema_distance, volatility_atr, source, is_shape_divergent,
+                    quality_tier, is_contrarian, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 signal.symbol,
                 signal.interval,
@@ -127,6 +137,8 @@ class SQLiteRepo(IRepository):
                 signal.volatility_atr,
                 signal.source,
                 signal.is_shape_divergent,
+                signal.quality_tier,
+                signal.is_contrarian,
                 int(time.time() * 1000)
             ))
             await db.commit()
@@ -256,3 +268,152 @@ class SQLiteRepo(IRepository):
             if row:
                 return simple_decrypt(row[0])
             return ""
+
+    # ======== 分页查询扩展 ========
+
+    def _row_to_signal(self, row: dict) -> Signal:
+        """将数据库行转换为 Signal 实体"""
+        score_details_raw = row.get("score_details")
+        score_details = {}
+        if score_details_raw:
+            try:
+                score_details = json.loads(score_details_raw) if isinstance(score_details_raw, str) else score_details_raw
+            except (json.JSONDecodeError, TypeError):
+                score_details = {}
+
+        return Signal(
+            id=row.get("id"),
+            symbol=row.get("symbol"),
+            interval=row.get("interval", "1h"),
+            direction=row.get("direction"),
+            entry_price=row.get("entry_price"),
+            stop_loss=row.get("stop_loss"),
+            take_profit_1=row.get("take_profit_1"),
+            timestamp=row.get("timestamp"),
+            reason=row.get("reason"),
+            sl_distance_pct=row.get("sl_distance_pct"),
+            score=row.get("score"),
+            score_details=score_details,
+            shadow_ratio=row.get("shadow_ratio", 0.0),
+            ema_distance=row.get("ema_distance", 0.0),
+            volatility_atr=row.get("volatility_atr", 0.0),
+            source=row.get("source", "realtime"),
+            is_contrarian=bool(row["is_contrarian"]) if row.get("is_contrarian") else False,
+            is_shape_divergent=bool(row["is_shape_divergent"]) if row.get("is_shape_divergent") else False,
+            quality_tier=row.get("quality_tier", "B")
+        )
+
+    def _validate_sort_column(self, sort_by: str) -> str:
+        """验证排序字段，防止 SQL 注入"""
+        allowed_columns = [
+            "timestamp", "score", "symbol", "interval",
+            "direction", "entry_price", "created_at"
+        ]
+        if sort_by in allowed_columns:
+            return sort_by
+        return "timestamp"  # 默认按时间排序
+
+    def _validate_order(self, order: str) -> str:
+        """验证排序方向，防止 SQL 注入（白名单校验）"""
+        if order.lower() in ("asc", "desc"):
+            return order.upper()
+        return "DESC"  # 默认值
+
+    async def query_signals_with_pagination(
+        self,
+        symbols: Optional[List[str]] = None,
+        intervals: Optional[List[str]] = None,
+        directions: Optional[List[str]] = None,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        min_score: Optional[int] = None,
+        max_score: Optional[int] = None,
+        quality_tier: Optional[str] = None,
+        source: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 20,
+        sort_by: str = "timestamp",
+        order: str = "desc"
+    ) -> Tuple[List[Signal], int]:
+        """
+        分页查询信号
+
+        :return: (信号列表，总数)
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            # 构建动态 WHERE 子句
+            where_clauses = []
+            params = []
+
+            if symbols:
+                placeholders = ','.join(['?' for _ in symbols])
+                where_clauses.append(f"symbol IN ({placeholders})")
+                params.extend(symbols)
+
+            if intervals:
+                placeholders = ','.join(['?' for _ in intervals])
+                where_clauses.append(f"interval IN ({placeholders})")
+                params.extend(intervals)
+
+            if directions:
+                placeholders = ','.join(['?' for _ in directions])
+                where_clauses.append(f"direction IN ({placeholders})")
+                params.extend(directions)
+
+            if start_time:
+                where_clauses.append("timestamp >= ?")
+                params.append(start_time)
+
+            if end_time:
+                where_clauses.append("timestamp <= ?")
+                params.append(end_time)
+
+            if min_score is not None:
+                where_clauses.append("score >= ?")
+                params.append(min_score)
+
+            if max_score is not None:
+                where_clauses.append("score <= ?")
+                params.append(max_score)
+
+            if quality_tier:
+                where_clauses.append("quality_tier = ?")
+                params.append(quality_tier)
+
+            if source:
+                where_clauses.append("source = ?")
+                params.append(source)
+
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+            # 查询总数
+            count_sql = f"SELECT COUNT(*) FROM signals WHERE {where_sql}"
+            cursor = await db.execute(count_sql, params)
+            total = (await cursor.fetchone())[0]
+
+            # 分页查询 - 白名单校验防止 SQL 注入
+            sort_column = self._validate_sort_column(sort_by)
+            order_dir = self._validate_order(order)
+
+            query_sql = f"""
+                SELECT id, symbol, interval, direction, entry_price, stop_loss,
+                       take_profit_1, timestamp, reason, sl_distance_pct, score,
+                       score_details, shadow_ratio, ema_distance, volatility_atr,
+                       source, is_shape_divergent, quality_tier
+                FROM signals
+                WHERE {where_sql}
+                ORDER BY {sort_column} {order_dir}
+                LIMIT ? OFFSET ?
+            """
+            params_with_limit = params + [limit, offset]
+
+            # 设置 row_factory 以支持字典式访问
+            def row_factory(cursor, row):
+                return {col[0]: row[i] for i, col in enumerate(cursor.description)}
+
+            db.row_factory = row_factory
+            cursor = await db.execute(query_sql, params_with_limit)
+            rows = await cursor.fetchall()
+
+            signals = [self._row_to_signal(row) for row in rows]
+            return signals, total

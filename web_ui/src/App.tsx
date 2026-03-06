@@ -11,7 +11,6 @@ import { SignalRadar } from "@/components/SignalRadar";
 import { Positions } from "@/components/Positions";
 import { Settings } from "@/components/Settings";
 import { PositionDetailModal } from "@/components/PositionDetailModal";
-import { usePolling } from "@/hooks/usePolling";
 
 const AVAILABLE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
 
@@ -34,7 +33,7 @@ export default function App() {
     is_contrarian: false,
   });
 
-  const [selectedPositionDetail, setSelectedPositionDetail] = useState<any>(null);
+  const [selectedPositionDetail, setSelectedPositionDetail] = useState<unknown>(null);
   const [loadingPositionDetail, setLoadingPositionDetail] = useState(false);
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
 
@@ -70,22 +69,7 @@ export default function App() {
     dynamic_sl_atr_multiplier: 0.5,
   });
 
-  // 系统状态轮询 - 30 秒间隔
-  const {
-    data: systemStatusData,
-  } = usePolling(
-    async () => {
-      const res = await fetch(`${API_BASE}/api/system/status`);
-      if (!res.ok) throw new Error("System status fetch failed");
-      return await res.json();
-    },
-    {
-      interval: 30000,
-      enabled: true,
-      immediate: true,
-    }
-  );
-
+  // 系统状态轮询 - 30 秒间隔（保留用于健康监控）
   const [systemStatus, setSystemStatus] = useState({
     is_connected: false,
     api_latency_ms: 0,
@@ -93,80 +77,56 @@ export default function App() {
     uptime: "0s",
   });
 
-  // 账户余额轮询 - 60 秒间隔
-  const {
-    data: dashboardData,
-  } = usePolling(
-    async () => {
-      const res = await fetch(`${API_BASE}/api/account/balance`);
-      if (!res.ok) throw new Error("Balance fetch failed");
-      const data = await res.json();
-      return data.status === "success" ? data.data : null;
-    },
-    {
-      interval: 60000,
-      enabled: true,
-      immediate: true,
-    }
-  );
-
-  // 信号列表轮询 - 60 秒间隔
-  const {
-    data: signals,
-    refresh: refreshSignals,
-  } = usePolling(
-    async () => {
-      const res = await fetch(`${API_BASE}/api/signals`);
-      if (!res.ok) throw new Error("Signals fetch failed");
-      const resJson = await res.json();
-      // API 返回格式：{ status: "success", data: { items: [...], total: 888 }, meta: {...} }
-      return Array.isArray(resJson?.data?.items) ? resJson.data.items : [];
-    },
-    {
-      interval: 60000,
-      enabled: true,
-      immediate: true,
-    }
-  );
+  // 持仓刷新触发器
+  const [positionRefreshTrigger, setPositionRefreshTrigger] = useState(0);
 
   // 实时价格轮询 - 2 秒间隔
-  usePolling(
-    async () => {
+  useEffect(() => {
+    const fetchPrices = async () => {
       const activeSymbols = config.symbols.split(",").map((s) => s.trim()).filter(Boolean);
-      if (activeSymbols.length === 0) return {};
+      if (activeSymbols.length === 0) return;
 
       const symbolQuery = `["${activeSymbols.join('","')}"]`;
-      const res = await fetch(
-        `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbolQuery)}`
-      );
+      try {
+        const res = await fetch(
+          `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbolQuery)}`
+        );
+        if (!res.ok) throw new Error("Price fetch failed");
+        const data = await res.json();
+        const newPrices: Record<string, number> = {};
+        data.forEach((item: { symbol: string; price: string }) => {
+          newPrices[item.symbol] = Number(item.price);
+        });
+        setRealtimePrices((prev) => ({ ...prev, ...newPrices }));
+      } catch {
+        console.error("Price fetch error");
+      }
+    };
 
-      if (!res.ok) throw new Error("Price fetch failed");
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 2000);
+    return () => clearInterval(interval);
+  }, [config.symbols]);
 
-      const data = await res.json();
-      const newPrices: Record<string, number> = {};
-      data.forEach((item: any) => {
-        newPrices[item.symbol] = Number(item.price);
-      });
-      return newPrices;
-    },
-    {
-      interval: 2000,
-      enabled: true,
-      immediate: true,
-      onSuccess: (data) => {
-        if (data) {
-          setRealtimePrices((prev) => ({ ...prev, ...data }));
-        }
-      },
-    }
-  );
-
-  // 同步系统状态到 state
+  // 系统状态轮询 - 30 秒间隔
   useEffect(() => {
-    if (systemStatusData?.data) {
-      setSystemStatus((prev) => ({ ...prev, ...systemStatusData.data }));
-    }
-  }, [systemStatusData]);
+    const fetchSystemStatus = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/system/status`);
+        if (!res.ok) throw new Error("System status fetch failed");
+        const data = await res.json();
+        if (data?.data) {
+          setSystemStatus((prev) => ({ ...prev, ...data.data }));
+        }
+      } catch {
+        console.error("System status fetch error");
+      }
+    };
+
+    fetchSystemStatus();
+    const interval = setInterval(fetchSystemStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Load preferences
   useEffect(() => {
@@ -222,7 +182,7 @@ export default function App() {
           const local = localStorage.getItem("monitor_table_columns");
           if (local) setTableColumns(JSON.parse(local));
         }
-      } catch (error) {
+      } catch {
         console.warn("Initial config load failed");
       } finally {
         setLoading(false);
@@ -233,7 +193,7 @@ export default function App() {
   }, []);
 
   // 配置变更处理
-  const handleConfigChange = (field: string, value: any) => {
+  const handleConfigChange = (field: string, value: unknown) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -254,11 +214,16 @@ export default function App() {
       } else {
         toast.error("网络异常或接口报错");
       }
-    } catch (e) {
+    } catch {
       toast.error("请求异常");
     } finally {
       setLoadingPositionDetail(false);
     }
+  };
+
+  // 触发持仓刷新
+  const handlePositionRefresh = () => {
+    setPositionRefreshTrigger((prev) => prev + 1);
   };
 
   if (loading) {
@@ -365,39 +330,31 @@ export default function App() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Dashboard Tab */}
+            {/* Dashboard Tab - 组件自行加载数据 */}
             <TabsContent value="dashboard">
               <Dashboard
                 systemStatus={systemStatus}
-                dashboardData={dashboardData}
                 realtimePrices={realtimePrices}
                 activeSymbols={config.symbols.split(",").map((s) => s.trim()).filter(Boolean)}
                 onOpenPositionDetail={handleOpenPositionDetail}
               />
             </TabsContent>
 
-            {/* Signals Tab */}
+            {/* Signals Tab - 组件自行加载数据 */}
             <TabsContent value="signals">
               <SignalRadar
-                signals={signals || []}
                 availableSymbols={AVAILABLE_SYMBOLS}
                 tableColumns={tableColumns}
                 onTableColumnsChange={setTableColumns}
-                onSignalsChange={(newSignals) => {
-                  // 手动更新信号列表用于删除后的即时响应
-                  // 实际数据会在下一次轮询时与后端同步
-                  const event = new CustomEvent("local-signals-update", { detail: newSignals });
-                  window.dispatchEvent(event);
-                }}
-                onRefresh={refreshSignals}
               />
             </TabsContent>
 
-            {/* Positions Tab */}
+            {/* Positions Tab - 支持外部刷新触发器 */}
             <TabsContent value="positions">
               <Positions
-                dashboardData={dashboardData}
+                refreshTrigger={positionRefreshTrigger}
                 onOpenPositionDetail={handleOpenPositionDetail}
+                onRefresh={handlePositionRefresh}
               />
             </TabsContent>
 

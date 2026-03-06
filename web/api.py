@@ -20,6 +20,8 @@ from domain.strategy.scoring_config import ScoringConfig
 from domain.strategy.scoring_factory import ScoringStrategyFactory
 from infrastructure.reader.binance_api import BinanceAccountReader
 from domain.services import ConfigService, AccountService, SignalService
+from application.signal_query_service import SignalQueryService
+from application.position_service import PositionService
 
 logger = logging.getLogger(__name__)
 
@@ -97,30 +99,27 @@ async def get_system_status(request: Request):
 # ==========================================
 @app.get("/api/account/dashboard")
 async def get_account_dashboard(request: Request):
-    """获取真实账户余额和持仓列表。验证 Key 是否只读与有效。"""
-    repo = request.app.state.repo
-    api_key = await repo.get_secret("binance_api_key")
-    api_secret = await repo.get_secret("binance_api_secret")
+    """
+    账户仪表盘数据
+    返回新字段结构：wallet_balance, total_unrealized_pnl, margin_balance
+    """
+    # 获取持仓服务（从 app.state 获取）
+    service: PositionService = request.app.state.position_service
 
-    if not api_key or not api_secret:
-        raise HTTPException(
-            status_code=400,
-            detail="Binance API keys are not configured. Please set them in Settings.",
-        )
-
-    reader = BinanceAccountReader(api_key=api_key, api_secret=api_secret)
     try:
-        balance = await reader.fetch_account_balance()
-        return {
-            "status": "success",
-            "data": {
-                "total_wallet_balance": balance.total_wallet_balance,
-                "available_balance": balance.available_balance,
-                "total_unrealized_pnl": balance.total_unrealized_pnl,
-                "current_positions_count": balance.current_positions_count,
-                "positions": balance.positions,
-            },
-        }
+        # 获取数据
+        wallet_balance = await service.get_wallet_balance()
+        unrealized_pnl = await service.get_unrealized_pnl()
+        margin_balance = await service.get_margin_balance(wallet_balance, unrealized_pnl)
+        positions = await service.refresh_positions()
+
+        return _create_response({
+            "wallet_balance": wallet_balance,
+            "total_unrealized_pnl": unrealized_pnl,
+            "margin_balance": margin_balance,
+            "current_positions_count": len(positions),
+            "positions": positions,
+        })
     except httpx.HTTPStatusError as e:
         status_code = e.response.status_code
         if status_code in [401, 403]:
@@ -136,6 +135,61 @@ async def get_account_dashboard(request: Request):
             status_code=500,
             detail=f"Failed to fetch account data from Binance: {e.response.text}",
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/positions/refresh")
+async def refresh_positions(request: Request):
+    """
+    实时刷新持仓
+    从币安 API 获取最新持仓数据
+    """
+    # 获取持仓服务（从 app.state 获取）
+    service: PositionService = request.app.state.position_service
+
+    try:
+        positions = await service.refresh_positions()
+        return _create_response({"positions": positions})
+    except httpx.HTTPStatusError as e:
+        status_code = e.response.status_code
+        if status_code in [401, 403]:
+            try:
+                raw_msg = e.response.json().get("msg", "Unknown error")
+            except:
+                raw_msg = e.response.text
+            raise HTTPException(
+                status_code=status_code,
+                detail=f"BINANCE API ERROR: Invalid API Key. ({raw_msg})",
+            )
+        raise HTTPException(status_code=500, detail=f"Failed to fetch positions: {e.response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/account/wallet-balance")
+async def get_wallet_balance(request: Request):
+    """
+    获取钱包余额（初始保证金）
+    """
+    # 获取持仓服务（从 app.state 获取）
+    service: PositionService = request.app.state.position_service
+
+    try:
+        balance = await service.get_wallet_balance()
+        return _create_response({"wallet_balance": balance})
+    except httpx.HTTPStatusError as e:
+        status_code = e.response.status_code
+        if status_code in [401, 403]:
+            try:
+                raw_msg = e.response.json().get("msg", "Unknown error")
+            except:
+                raw_msg = e.response.text
+            raise HTTPException(
+                status_code=status_code,
+                detail=f"BINANCE API ERROR: Invalid API Key. ({raw_msg})",
+            )
+        raise HTTPException(status_code=500, detail=f"Failed to fetch wallet balance: {e.response.text}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -281,10 +335,11 @@ async def get_signals(
     min_score: Optional[int] = None,
     max_score: Optional[int] = None,
     source: Optional[str] = None,
+    quality_tier: Optional[str] = None,
     sort_by: str = Query("timestamp", regex="^(timestamp|score)$"),
     order: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    size: int = Query(20, ge=1, le=200),
 ):
     """
     分页、多维度历史信号检索接口
@@ -298,37 +353,69 @@ async def get_signals(
     - min_score: 最低分数
     - max_score: 最高分数
     - source: 信号来源 "realtime" 或 "history_scan"
+    - quality_tier: 信号等级 "A"、"B" 或 "C"
     - sort_by: 排序字段 "timestamp" 或 "score"
     - order: 排序方向 "asc" 或 "desc"
     - page: 页码，从 1 开始
-    - page_size: 每页数量，最大 200
+    - size: 每页数量，最大 200 (默认 20)
     """
-    repo = request.app.state.repo
-
-    # 使用服务层获取数据
-    signal_service = SignalService(repo)
+    # 获取信号查询服务（从 app.state 获取）
+    service: SignalQueryService = request.app.state.signal_query_service
 
     # 解析逗号分隔的参数
-    symbol_list = symbols.split(",") if symbols else None
-    interval_list = intervals.split(",") if intervals else None
-    direction_list = directions.split(",") if directions else None
+    symbols_list = symbols.split(",") if symbols else None
+    intervals_list = intervals.split(",") if intervals else None
+    directions_list = directions.split(",") if directions else None
 
     try:
-        data = await signal_service.get_signals(
-            symbols=symbol_list,
-            intervals=interval_list,
-            directions=direction_list,
+        # 使用 SignalQueryService 查询
+        result = await service.query_signals(
+            symbols=symbols_list,
+            intervals=intervals_list,
+            directions=directions_list,
             start_time=start_time,
             end_time=end_time,
             min_score=min_score,
             max_score=max_score,
+            quality_tier=quality_tier,
             source=source,
+            page=page,
+            size=size,
             sort_by=sort_by,
             order=order,
-            page=page,
-            page_size=page_size,
         )
-        return _create_response(data)
+
+        # 转换为字典列表
+        def signal_to_dict(s) -> dict:
+            return {
+                "id": s.id,
+                "symbol": s.symbol,
+                "interval": s.interval,
+                "direction": s.direction,
+                "entry_price": s.entry_price,
+                "stop_loss": s.stop_loss,
+                "take_profit_1": s.take_profit_1,
+                "timestamp": s.timestamp,
+                "reason": s.reason,
+                "sl_distance_pct": s.sl_distance_pct,
+                "score": s.score,
+                "score_details": s.score_details,
+                "shadow_ratio": s.shadow_ratio,
+                "ema_distance": s.ema_distance,
+                "volatility_atr": s.volatility_atr,
+                "source": s.source,
+                "is_contrarian": s.is_contrarian,
+                "is_shape_divergent": s.is_shape_divergent,
+                "quality_tier": s.quality_tier,
+            }
+
+        # 直接返回分页数据，不使用 _create_response 包裹
+        return {
+            "items": [signal_to_dict(s) for s in result.items],
+            "total": result.total,
+            "page": result.page,
+            "size": result.size,
+        }
     except Exception as e:
         logger.error(f"信号查询失败：{e}")
         raise HTTPException(status_code=500, detail=f"信号查询失败：{str(e)}")
@@ -1486,16 +1573,34 @@ async def test_push_notification(request: Request, channel: str = "wecom"):
     :param channel: 推送通道 (wecom, feishu, telegram)
     """
     repo = request.app.state.repo
+    # 使用与正式信号相同的格式模板，确保测试和正式推送一致
     test_message = (
-        f"**🧪 测试推送消息**\n\n"
-        f"- 通道：{channel}\n"
-        f"- 时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"- 状态：这是一条测试消息\n\n"
-        f"> 如果您收到此消息，说明推送配置正确。"
+        "**🧪 测试推送 · --分**\n"
+        "#TESTUSDT | 1h | 🟢 多\n"
+        "入场：`1000.0`\n"
+        "止损：`950.0`\n"
+        "目标：`1100.0`\n"
+        "杠杆：`10.0x`"
     )
 
     try:
-        if channel == "wecom":
+        if channel == "all":
+            # 同时发送到所有通道
+            from infrastructure.notify.feishu import FeishuNotifier
+            from infrastructure.notify.wecom import WeComNotifier
+            from infrastructure.notify.telegram import TelegramNotifier
+            
+            feishu = FeishuNotifier(repo)
+            wecom = WeComNotifier(repo)
+            telegram = TelegramNotifier(repo)
+            
+            await asyncio.gather(
+                feishu.send_markdown(test_message),
+                wecom.send_markdown(test_message),
+                telegram.send_markdown(test_message)
+            )
+            return {"status": "success", "message": "已发送测试消息到所有通道"}
+        elif channel == "wecom":
             from infrastructure.notify.wecom import WeComNotifier
             wecom_notifier = WeComNotifier(repo)
             await wecom_notifier.send_markdown(test_message)

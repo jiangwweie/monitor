@@ -204,6 +204,14 @@ async def lifespan(fastapi_app: FastAPI):
     chart_service = ChartService(kline_fetcher=kline_fetcher, db_path=DB_PATH)
     fastapi_app.state.chart_service = chart_service
 
+    # 注册信号查询服务（应用层）
+    from application.signal_query_service import SignalQueryService
+    fastapi_app.state.signal_query_service = SignalQueryService(engine.repo)
+
+    # 注册持仓服务（应用层）
+    from application.position_service import PositionService
+    fastapi_app.state.position_service = PositionService(engine.account_reader, engine.repo)
+
     # 不阻塞地在后台事件循环中拉起监察大循环
     engine_task = asyncio.create_task(engine.start())
 

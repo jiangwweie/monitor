@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -37,7 +37,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Filter,
   Trash2,
   ScanSearch,
   Calendar,
@@ -51,35 +50,68 @@ import { SignalChartModal } from "@/components/SignalChartModal";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import type { DateRange } from "react-day-picker";
 import { HistoryScanProgressPanel } from "@/components/HistoryScanProgressPanel";
+import { Pagination } from "@/components/Pagination";
+
+interface Signal {
+  id: number;
+  symbol: string;
+  interval: string;
+  direction: string;
+  score: number;
+  entry_price: number;
+  stop_loss: number;
+  take_profit_1: number;
+  timestamp: number;
+  quality_tier: string;
+  source?: string;
+  score_details?: {
+    shape?: number;
+  };
+  ema_distance?: number;
+  is_contrarian?: boolean;
+  volatility_atr?: number;
+}
 
 interface SignalRadarProps {
-  signals: any[];
   availableSymbols: string[];
   tableColumns: Record<string, boolean>;
   onTableColumnsChange: (columns: Record<string, boolean>) => void;
-  onSignalsChange: (signals: any[]) => void;
-  onRefresh?: () => void;
 }
 
 export function SignalRadar({
-  signals,
   availableSymbols,
   tableColumns,
   onTableColumnsChange,
-  onSignalsChange,
-  onRefresh,
 }: SignalRadarProps) {
+  // 信号数据
+  const [signals, setSignals] = useState<Signal[]>([]);
+
+  // 筛选条件 - 改变时不触发请求
   const [filterSymbol, setFilterSymbol] = useState("ALL");
   const [filterDirection, setFilterDirection] = useState("ALL");
   const [filterInterval, setFilterInterval] = useState("ALL");
   const [filterTier, setFilterTier] = useState("ALL");
-  const [selectedSignals, setSelectedSignals] = useState<Set<string>>(new Set());
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+  // 分页状态
+  const [pagination, setPagination] = useState({
+    page: 1,
+    size: 20,
+    total: 0,
+  });
+
+  // 查询触发器 - 仅点击查询按钮时更新
+  const [queryTrigger, setQueryTrigger] = useState(0);
+  const [isQuerying, setIsQuerying] = useState(false);
+
+  // 排序状态
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "asc" | "desc";
   }>({ key: "timestamp", direction: "desc" });
-  const [isQuerying, setIsQuerying] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+  // 选中状态
+  const [selectedSignals, setSelectedSignals] = useState<Set<string>>(new Set());
 
   // History Scan Modal States
   const [isHistoryScanOpen, setIsHistoryScanOpen] = useState(false);
@@ -96,8 +128,63 @@ export function SignalRadar({
   const [isProgressPanelOpen, setIsProgressPanelOpen] = useState(false);
 
   // Signal Chart Detail Modal
-  const [chartDetailSignal, setChartDetailSignal] = useState<any>(null);
+  const [chartDetailSignal, setChartDetailSignal] = useState<Signal | null>(null);
   const [isChartDetailOpen, setIsChartDetailOpen] = useState(false);
+
+  // 暴露刷新方法给父组件（用于删除后和历史扫描完成后）
+  const refreshSignals = async () => {
+    await fetchSignals();
+  };
+
+  // 查询信号的实际执行函数 - 使用 useCallback 包裹
+  const fetchSignals = useCallback(async () => {
+    setIsQuerying(true);
+    try {
+      const params = new URLSearchParams();
+      params.append("page", pagination.page.toString());
+      params.append("size", pagination.size.toString());
+
+      // 添加筛选条件
+      if (filterSymbol !== "ALL") params.append("symbols", filterSymbol);
+      if (filterDirection !== "ALL") params.append("directions", filterDirection);
+      if (filterInterval !== "ALL") params.append("intervals", filterInterval);
+      if (filterTier === "A") params.append("min_score", "70");
+      else if (filterTier === "C") params.append("min_score", "0");
+
+      // 时间范围
+      if (dateRange?.from) {
+        params.append("start_time", dateRange.from.getTime().toString());
+        params.append("end_time", dateRange.to ? dateRange.to.getTime().toString() : Date.now().toString());
+      }
+
+      // 排序
+      params.append("sort_by", sortConfig.key);
+      params.append("order", sortConfig.direction);
+
+      const res = await fetch(`http://localhost:8000/api/signals?${params.toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      setSignals(data.items || []);
+      setPagination(prev => ({ ...prev, total: data.total || 0 }));
+      setSelectedSignals(new Set());
+
+      if (queryTrigger > 0) {
+        toast.success(`查询完成，找到 ${data.total || 0} 条信号`);
+      }
+    } catch {
+      toast.error("查询失败", { description: "请检查后端服务状态" });
+    } finally {
+      setIsQuerying(false);
+    }
+  }, [pagination.page, pagination.size, filterSymbol, filterDirection, filterInterval, filterTier, dateRange, sortConfig.key, sortConfig.direction, queryTrigger]);
+
+  // 合并所有数据加载逻辑为一个 useEffect
+  useEffect(() => {
+    if (queryTrigger > 0) {
+      fetchSignals();
+    }
+  }, [queryTrigger, fetchSignals]);
 
   const getScoreBadgeColor = (score: number) => {
     if (score >= 90)
@@ -122,29 +209,16 @@ export function SignalRadar({
 
   const getTierBadgeColor = (tier: string) => getTierBadgeProps(tier).className;
 
-  const sortedAndFilteredSignals = (() => {
-    let result = [...signals];
-    if (filterSymbol !== "ALL") result = result.filter((s) => s.symbol === filterSymbol);
-    if (filterDirection !== "ALL") result = result.filter((s) => s.direction === filterDirection);
-    if (filterInterval !== "ALL") result = result.filter((s) => s.interval === filterInterval);
-    if (filterTier !== "ALL") result = result.filter((s) => (s.quality_tier || "B") === filterTier);
-    result.sort((a, b) => {
-      let valA = a[sortConfig.key];
-      let valB = b[sortConfig.key];
-      if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
-      if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
-      return 0;
-    });
-    return result;
-  })();
+  // 信号列表直接使用后端返回的数据（已分页）
+  const displaySignals = signals;
 
-  const getSignalId = (s: any, idx: number) => s.id || `${s.timestamp}-${s.symbol}-${idx}`;
+  const getSignalId = (s: Signal, idx: number): string => s.id?.toString() || `${s.timestamp}-${s.symbol}-${idx}`;
 
   const handleToggleSelectAll = () => {
-    if (selectedSignals.size === sortedAndFilteredSignals.length && sortedAndFilteredSignals.length > 0) {
+    if (selectedSignals.size === displaySignals.length && displaySignals.length > 0) {
       setSelectedSignals(new Set());
     } else {
-      setSelectedSignals(new Set(sortedAndFilteredSignals.map((s, i) => getSignalId(s, i))));
+      setSelectedSignals(new Set(displaySignals.map((s, i) => getSignalId(s, i))));
     }
   };
 
@@ -164,8 +238,7 @@ export function SignalRadar({
         body: JSON.stringify({ signal_ids: idsToDelete }),
       });
       if (res.ok) {
-        // 删除成功后立即刷新列表
-        await onRefresh?.();
+        await refreshSignals();
         const newSelected = new Set(selectedSignals);
         idsToDelete.forEach((id) => newSelected.delete(id));
         setSelectedSignals(newSelected);
@@ -173,7 +246,7 @@ export function SignalRadar({
       } else {
         throw new Error("Delete failed");
       }
-    } catch (error) {
+    } catch {
       toast.error("删除信号失败", { description: "请检查网络或后端服务状态" });
     }
   };
@@ -185,50 +258,36 @@ export function SignalRadar({
         headers: { "Content-Type": "application/json" },
       });
       if (res.ok) {
-        await onRefresh?.();
+        await refreshSignals();
         setSelectedSignals(new Set());
         toast.success("已清空所有信号记录");
       } else {
         throw new Error("Clear failed");
       }
-    } catch (error) {
+    } catch {
       toast.error("清空信号失败", { description: "请检查网络或后端服务状态" });
     }
   };
 
   const handleSortToggle = (key: string) => {
-    setSortConfig((prev) => ({ key, direction: prev.key === key && prev.direction === "desc" ? "asc" : "desc" }));
+    setSortConfig((prev) => {
+      const newDirection = prev.key === key && prev.direction === "desc" ? "asc" : "desc";
+      // 排序变更时触发查询
+      setPagination(p => ({ ...p, page: 1 }));
+      setQueryTrigger(t => t + 1);
+      return { key, direction: newDirection };
+    });
   };
 
-  const handleApplyFilters = async () => {
-    setIsQuerying(true);
-    try {
-      const params = new URLSearchParams();
-      if (filterSymbol !== "ALL") params.append("symbols", filterSymbol);
-      if (filterDirection !== "ALL") params.append("directions", filterDirection);
-      if (filterInterval !== "ALL") params.append("intervals", filterInterval);
-      if (dateRange?.from) {
-        params.append("start_time", dateRange.from.getTime().toString());
-        params.append("end_time", dateRange.to ? dateRange.to.getTime().toString() : Date.now().toString());
-      }
-      if (filterTier === "A") params.append("min_score", "70");
-      else if (filterTier === "C") params.append("min_score", "0");
-      params.append("sort_by", sortConfig.key);
-      params.append("order", sortConfig.direction);
-      params.append("size", "200");
-      params.append("page", "1");
+  // 处理筛选条件变更 - 不触发查询
+  const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (value: string) => {
+    setter(value);
+  };
 
-      const res = await fetch(`http://localhost:8000/api/signals?${params.toString()}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      onSignalsChange(data.items || []);
-      setSelectedSignals(new Set());
-      toast.success(`查询完成，找到 ${data.total || 0} 条信号`);
-    } catch (error) {
-      toast.error("查询失败", { description: error instanceof Error ? error.message : "请检查后端服务状态" });
-    } finally {
-      setIsQuerying(false);
-    }
+  // 点击查询按钮 - 触发查询
+  const handleApplyFilters = () => {
+    setPagination(prev => ({ ...prev, page: 1 })); // 重置页码
+    setQueryTrigger(prev => prev + 1);
   };
 
   const handleSubmitHistoryScan = async () => {
@@ -256,7 +315,7 @@ export function SignalRadar({
         const errData = await res.json().catch(() => ({}));
         toast.error("提交失败", { description: errData.detail || "请检查参数与后端服务状态" });
       }
-    } catch (error) {
+    } catch {
       toast.error("网络异常", { description: "无法连接后端服务" });
     } finally {
       setHistoryScanSubmitting(false);
@@ -264,8 +323,17 @@ export function SignalRadar({
   };
 
   const handleTaskComplete = () => {
-    onRefresh?.();
+    refreshSignals();
     toast.success("历史信号扫描完成！");
+  };
+
+  // 分页处理
+  const handlePageChange = (newPage: number) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleSizeChange = (newSize: number) => {
+    setPagination(prev => ({ ...prev, size: newSize, page: 1 }));
   };
 
   return (
@@ -274,12 +342,12 @@ export function SignalRadar({
         {/* 上层：主筛选条件 */}
         <div className="p-4 border-b border-zinc-200 dark:border-white/5 bg-black/5 dark:bg-black/20">
           <div className="flex items-center gap-2 mb-4">
-            <Filter className="w-4 h-4 text-zinc-400" />
+            <Eye className="w-4 h-4 text-zinc-400" />
             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-300">信号过滤与筛选</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} presetLabel="时间范围" className="flex-shrink-0" />
-            <Select value={filterSymbol} onValueChange={setFilterSymbol}>
+            <Select value={filterSymbol} onValueChange={handleFilterChange(setFilterSymbol)} disabled={isQuerying}>
               <SelectTrigger className="w-[130px] h-9 bg-transparent border-zinc-200 dark:border-zinc-800 text-sm text-zinc-800 dark:text-zinc-200">
                 <SelectValue placeholder="币种筛选" />
               </SelectTrigger>
@@ -288,7 +356,7 @@ export function SignalRadar({
                 {availableSymbols.map((sym) => (<SelectItem key={sym} value={sym}>{sym}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select value={filterDirection} onValueChange={setFilterDirection}>
+            <Select value={filterDirection} onValueChange={handleFilterChange(setFilterDirection)} disabled={isQuerying}>
               <SelectTrigger className="w-[110px] h-9 bg-transparent border-zinc-200 dark:border-zinc-800 text-sm text-zinc-800 dark:text-zinc-200">
                 <SelectValue placeholder="方向筛选" />
               </SelectTrigger>
@@ -298,7 +366,7 @@ export function SignalRadar({
                 <SelectItem value="SHORT">做空 (SHORT)</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterInterval} onValueChange={setFilterInterval}>
+            <Select value={filterInterval} onValueChange={handleFilterChange(setFilterInterval)} disabled={isQuerying}>
               <SelectTrigger className="w-[120px] h-9 bg-transparent border-zinc-200 dark:border-zinc-800 text-sm text-zinc-800 dark:text-zinc-200">
                 <SelectValue placeholder="时间级别" />
               </SelectTrigger>
@@ -310,7 +378,7 @@ export function SignalRadar({
                 <SelectItem value="1d">1d</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterTier} onValueChange={setFilterTier}>
+            <Select value={filterTier} onValueChange={handleFilterChange(setFilterTier)} disabled={isQuerying}>
               <SelectTrigger className="w-[120px] h-9 bg-transparent border-zinc-200 dark:border-zinc-800 text-sm text-zinc-800 dark:text-zinc-200">
                 <SelectValue placeholder="信号等级" />
               </SelectTrigger>
@@ -325,11 +393,9 @@ export function SignalRadar({
             <Button variant="default" size="sm" onClick={handleApplyFilters} disabled={isQuerying} className="bg-blue-600 hover:bg-blue-700 text-white h-9">
               {isQuerying ? (<><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> 查询中...</>) : (<><ScanSearch className="w-4 h-4 mr-1.5" /> 查询</>)}
             </Button>
-            {onRefresh && (
-              <Button variant="ghost" size="sm" onClick={onRefresh} className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-300 h-9">
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-            )}
+            <Button variant="ghost" size="sm" onClick={refreshSignals} className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-300 h-9">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 
@@ -378,7 +444,7 @@ export function SignalRadar({
             <TableHeader className="bg-zinc-100 dark:bg-zinc-900/40">
               <TableRow className="hover:bg-transparent border-zinc-200 dark:border-white/5">
                 <TableHead className="w-[40px] pl-4">
-                  <Checkbox checked={sortedAndFilteredSignals.length > 0 && selectedSignals.size === sortedAndFilteredSignals.length} onCheckedChange={handleToggleSelectAll} className="border-zinc-400 dark:border-zinc-600" />
+                  <Checkbox checked={displaySignals.length > 0 && selectedSignals.size === displaySignals.length} onCheckedChange={handleToggleSelectAll} className="border-zinc-400 dark:border-zinc-600" />
                 </TableHead>
                 {tableColumns.timestamp !== false && (<TableHead className="font-semibold text-zinc-600 dark:text-zinc-400 w-[160px]"><div className="flex items-center gap-1 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors" onClick={() => handleSortToggle("timestamp")}>发生时间 <ArrowUpDown className="w-3 h-3 opacity-50" /></div></TableHead>)}
                 {tableColumns.symbol !== false && (<TableHead className="font-semibold text-zinc-600 dark:text-zinc-400">币种级别</TableHead>)}
@@ -394,10 +460,10 @@ export function SignalRadar({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedAndFilteredSignals.length === 0 ? (
+              {displaySignals.length === 0 ? (
                 <TableRow><TableCell colSpan={12} className="h-32 text-center text-zinc-500">暂无符合条件的信号记录</TableCell></TableRow>
               ) : (
-                sortedAndFilteredSignals.map((sig, idx) => {
+                displaySignals.map((sig, idx) => {
                   const sigId = getSignalId(sig, idx);
                   return (
                     <TableRow key={sigId} className="hover:bg-zinc-100/50 dark:hover:bg-white/[0.04] border-zinc-200 dark:border-white/5 transition-colors group">
@@ -406,7 +472,7 @@ export function SignalRadar({
                       {tableColumns.symbol !== false && (<TableCell className="font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 pt-4">{sig.symbol}{sig.interval && (<Badge variant="secondary" className="text-[10px] px-1 h-4">({sig.interval})</Badge>)}{sig.source === "history_scan" && (<Badge variant="outline" className="text-[10px] px-1.5 h-4 bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20">历史</Badge>)}</TableCell>)}
                       {tableColumns.direction !== false && (<TableCell><Badge variant="outline" className={`font-medium ${sig.direction === "LONG" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"}`}>{sig.direction === "LONG" ? "做多" : "做空"}</Badge></TableCell>)}
                       {tableColumns.score !== false && (<TableCell><Badge variant="outline" className={`min-w-[4rem] justify-center ${getScoreBadgeColor(sig.score)}`}>{sig.score} Pts</Badge></TableCell>)}
-                      {tableColumns.entry_price !== false && (<TableCell className="text-zinc-600 dark:text-zinc-400 text-sm font-mono font-medium">${Number(sig.entry_price || sig.price || 0).toFixed(4)}</TableCell>)}
+                      {tableColumns.entry_price !== false && (<TableCell className="text-zinc-600 dark:text-zinc-400 text-sm font-mono font-medium">${Number(sig.entry_price || 0).toFixed(4)}</TableCell>)}
                       {tableColumns.shape && (<TableCell className="text-zinc-600 dark:text-zinc-400 text-sm font-mono font-medium">{Number(sig.score_details?.shape || 0).toFixed(1)}</TableCell>)}
                       {tableColumns.ema && (<TableCell className="text-zinc-600 dark:text-zinc-400 text-sm font-mono font-medium">{Number(sig.ema_distance || 0).toFixed(2)}</TableCell>)}
                       {tableColumns.is_contrarian && (<TableCell className="text-zinc-600 dark:text-zinc-400 text-sm">{sig.is_contrarian ? (<Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs">逆势</Badge>) : (<span className="text-zinc-400 text-xs">顺势</span>)}</TableCell>)}
@@ -422,6 +488,17 @@ export function SignalRadar({
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* 分页组件 */}
+        <div className="px-4">
+          <Pagination
+            page={pagination.page}
+            size={pagination.size}
+            total={pagination.total}
+            onPageChange={handlePageChange}
+            onSizeChange={handleSizeChange}
+          />
         </div>
       </Card>
 

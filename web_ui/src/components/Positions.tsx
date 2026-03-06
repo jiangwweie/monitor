@@ -1,30 +1,56 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wallet } from "lucide-react";
+import { Wallet, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
-interface PositionsProps {
-  dashboardData: {
-    current_positions_count: number;
-    positions: any[];
-  } | null;
-  onOpenPositionDetail: (symbol: string) => void;
+interface Position {
+  symbol: string;
+  positionAmt: number;
+  entryPrice: number;
+  unrealized_pnl: number;
+  leverage: number;
 }
 
-export function Positions({ dashboardData, onOpenPositionDetail }: PositionsProps) {
-  if (!dashboardData) {
-    return (
-      <Card className="backdrop-blur-xl bg-white/5 border border-zinc-200 dark:border-white/10 rounded-3xl overflow-hidden shadow-lg">
-        <CardContent className="p-12 text-center text-zinc-500">
-          <Wallet className="w-16 h-16 mx-auto mb-4 opacity-20" />
-          <p className="text-lg">持仓数据暂时不可用</p>
-          <p className="text-xs opacity-60 mt-2">
-            请在"系统设置"中确认币安 API Keys 配置并确保网络畅通。
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+interface PositionsProps {
+  refreshTrigger?: number;
+  onOpenPositionDetail: (symbol: string) => void;
+  onRefresh?: () => void;
+}
+
+export function Positions({ refreshTrigger, onOpenPositionDetail, onRefresh }: PositionsProps) {
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [positionsCount, setPositionsCount] = useState(0);
+
+  // 刷新持仓数据
+  const fetchPositions = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:8000/api/positions/refresh");
+      if (!res.ok) throw new Error("Positions fetch failed");
+      const response = await res.json();
+      setPositions(response.data?.positions || []);  // 解包 data.positions
+      setPositionsCount(response.data?.positions?.length || 0);
+    } catch {
+      toast.error("获取持仓失败", {
+        description: "请检查后端服务状态"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 处理刷新按钮点击
+  const handleRefreshClick = () => {
+    onRefresh?.();
+  };
+
+  // 合并初始加载和刷新触发逻辑
+  useEffect(() => {
+    fetchPositions();
+  }, [refreshTrigger]);  // refreshTrigger 初始为 0，mount 时执行；变化时再次执行
 
   return (
     <Card className="backdrop-blur-xl bg-white/5 border border-zinc-200 dark:border-white/10 rounded-3xl overflow-hidden shadow-lg">
@@ -33,23 +59,40 @@ export function Positions({ dashboardData, onOpenPositionDetail }: PositionsProp
           <CardTitle className="flex items-center gap-2 text-zinc-900 dark:text-zinc-200">
             <Wallet className="w-5 h-5 text-blue-400" /> 活跃持仓列表
           </CardTitle>
-          <Badge
-            variant="outline"
-            className="bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
-          >
-            共 {dashboardData.current_positions_count} 个
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className="bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+            >
+              共 {positionsCount} 个
+            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefreshClick}
+              disabled={loading}
+              className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-300 h-9"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              刷新
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-6">
-        {dashboardData.positions.length === 0 ? (
+        {loading && positions.length === 0 ? (
+          <div className="h-64 flex flex-col items-center justify-center text-zinc-500 text-sm">
+            <RefreshCw className="w-8 h-8 mb-4 animate-spin opacity-50" />
+            加载持仓数据中...
+          </div>
+        ) : positions.length === 0 ? (
           <div className="h-64 flex flex-col items-center justify-center text-zinc-500 text-sm">
             <Wallet className="w-10 h-10 mb-4 opacity-20" />
             当前无活跃持仓
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {dashboardData.positions.map((pos, idx) => (
+            {positions.map((pos, idx) => (
               <div
                 key={idx}
                 className="bg-white/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-2xl p-5 hover:bg-white dark:hover:bg-zinc-800 transition-colors shadow-sm"

@@ -28,12 +28,26 @@ npm run preview    # Preview production build
 
 ### Docker (full stack)
 ```bash
-docker-compose up          # Build and start both services
-docker-compose up -d       # Detached mode
+# 确保宿主机目录存在
+mkdir -p /Users/jiangwei/Documents/docker/monitor/{data,logs,config}
+
+# 构建并启动
+docker-compose up --build -d
+
+# 查看日志
+docker logs -f cryptoradar-backend
+docker logs -f cryptoradar-frontend
+
+# 停止
 docker-compose down
 ```
-Backend → port 8000, Frontend → port 5173 (mapped from Nginx :80 in container).
-SQLite DB and `.env` are bind-mounted from `/Users/jiangwei/Documents/docker/monitor/`.
+Backend → port 8000, Frontend → port 5174 (Docker).
+本地开发：Frontend → port 5173.
+所有数据持久化到 `/Users/jiangwei/Documents/docker/monitor/`:
+- `data/radar.db` - SQLite 数据库
+- `logs/backend.log` - 应用日志
+- `config/` - 配置文件导入/导出
+- `.env` - 环境变量
 
 ## Architecture
 

@@ -330,38 +330,27 @@ class CryptoRadarEngine:
         # 这里为了简化不另开 task，可放在循环空闲期，不过当前是阻塞流，由其他机制衰减亦可。
 
     def _format_message(self, sizing, account, signal=None) -> str:
-        """组装 Markdown 通知，参考 docs/push.md 模板"""
+        """组装 Markdown 通知 - 精简版，只保留关键信息"""
         if signal is None:
             signal = sizing.signal
         timestamp_str = datetime.fromtimestamp(signal.timestamp / 1000).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
 
-        # 提取或推导过滤指标状态
-        direction_emoji = "🟢 LONG" if signal.direction == "LONG" else "🔴 SHORT"
-        ema_status = "Price > EMA60" if signal.direction == "LONG" else "Price < EMA60"
+        direction_emoji = "🟢 多" if signal.direction == "LONG" else "🔴 空"
 
-        # 将打分 (0-100) 映射到模板要求的 (0-10)
+        # 将打分 (0-100) 映射到 (0-10)
         display_score = round(signal.score / 10, 1)
 
         # 信号等级标记
         quality_tier = getattr(signal, 'quality_tier', 'B')
-        tier_badge = "🌟 精品" if quality_tier == 'A' else "📊 普通" if quality_tier == 'B' else "📝 观察"
+        tier_icon = "🌟" if quality_tier == 'A' else "📊" if quality_tier == 'B' else "📝"
 
         return (
-            f"**🚨 发现新交易信号 ({signal.reason})** [{tier_badge}]\n"
-            f"**交易对**: #{signal.symbol.upper()}\n"
-            f"**级别**: {signal.interval} | **方向**: {direction_emoji}\n"
-            f"**时间**: {timestamp_str}\n\n"
-            f"- 预计入场：`{signal.entry_price}`\n"
-            f"- 初始止损：`{signal.stop_loss}`\n"
-            f"- 预期 TP1: `{signal.take_profit_1}` (1.5R)\n\n"
-            f"- EMA60 状态：{ema_status}\n"
-            f"- ADX 强度：`Active`\n"
-            f"- 形态评分：`{display_score}/10`\n"
-            f"- 影线占比：`{signal.shadow_ratio}` 倍\n"
-            f"- EMA 距离：`{signal.ema_distance}%`\n"
-            f"- ATR 波动率：`{signal.volatility_atr}`\n"
-            f"- 信号等级：`{quality_tier}级`\n\n"
-            f"- 只读风控 (建议杠杆 {sizing.suggested_leverage:.1f}x)\n"
+            f"**{tier_icon} {signal.reason} · {display_score}分**\n"
+            f"#{signal.symbol.upper()} | {signal.interval} | {direction_emoji}\n"
+            f"入场：`{signal.entry_price}`\n"
+            f"止损：`{signal.stop_loss}`\n"
+            f"目标：`{signal.take_profit_1}`\n"
+            f"杠杆：`{sizing.suggested_leverage:.1f}x`"
         )

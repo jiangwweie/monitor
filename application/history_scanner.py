@@ -35,6 +35,7 @@ class HistoryScanTask:
     progress: int = 0              # 0 ~ 100
     message: str = ""
     result: Optional[dict] = None  # {total_bars_scanned, signals_found, signals_saved}
+    config: Optional[dict] = None  # {symbol, interval, start_date, end_date}
 
 
 class HistoryScanner:
@@ -82,6 +83,12 @@ class HistoryScanner:
             status="running",
             progress=0,
             message="任务已提交，正在初始化...",
+            config={
+                "symbol": symbol,
+                "interval": interval,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
         )
         self._tasks[task_id] = task
 

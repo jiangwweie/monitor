@@ -26,6 +26,8 @@ class BinanceAccountReader(IAccountReader):
         self.api_key = api_key
         self.api_secret = api_secret
         self.base_url = base_url
+        self.server_time_offset: int = 0  # 服务器时间偏移量（毫秒）
+        self._time_synced: bool = False
 
     def _generate_signature(self, query_string: str) -> str:
         """生成 Binance HMAC SHA256 跨域通信需要的签名"""
@@ -35,22 +37,46 @@ class BinanceAccountReader(IAccountReader):
             hashlib.sha256
         ).hexdigest()
 
+    async def _sync_server_time(self) -> None:
+        """同步服务器时间，计算本地与 Binance 服务器的时间偏移量"""
+        try:
+            async with httpx.AsyncClient() as client:
+                # 获取服务器时间（公开接口，无需签名）
+                response = await client.get(f"{self.base_url}/fapi/v1/time", timeout=5.0)
+                response.raise_for_status()
+                data = response.json()
+                server_time = data.get("serverTime", 0)
+                local_time = int(time.time() * 1000)
+                self.server_time_offset = server_time - local_time
+                self._time_synced = True
+                logger.debug(f"时间同步完成：本地={local_time}, 服务器={server_time}, 偏移量={self.server_time_offset}ms")
+        except Exception as e:
+            logger.warning(f"时间同步失败：{e}，将使用本地时间戳")
+            self.server_time_offset = 0
+
+    def _get_timestamp(self) -> int:
+        """获取校正后的时间戳（毫秒）"""
+        return int(time.time() * 1000) + self.server_time_offset
+
     async def fetch_account_balance(self) -> AccountBalance:
         """
         发送 GET 请求到 /fapi/v2/account 取回账户详细持仓。
         绝对红线：此处使用 httpx.AsyncClient 执行 GET，决不能包含 POST 逻辑。
         """
         endpoint = "/fapi/v2/account"
-        
-        # 组装安全校验用 URL Query string 参数
-        params = {
-            "timestamp": int(time.time() * 1000)
-        }
+
+        # 首次调用时同步服务器时间
+        if not self._time_synced:
+            await self._sync_server_time()
+
+        # 使用校正后的时间戳
+        timestamp = self._get_timestamp()
+        params = {"timestamp": timestamp}
         query_string = urlencode(params)
         signature = self._generate_signature(query_string)
-        
+
         url = f"{self.base_url}{endpoint}?{query_string}&signature={signature}"
-        
+
         headers = {
             "X-MBX-APIKEY": self.api_key
         }
@@ -58,6 +84,24 @@ class BinanceAccountReader(IAccountReader):
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(url, headers=headers, timeout=10.0)
+
+                # 如果是时间戳错误，尝试重新同步后重试一次
+                if response.status_code == 400:
+                    error_data = response.json() if response.content else {}
+                    error_code = error_data.get("code", 0)
+                    if error_code == -1021:  # Timestamp outside recvWindow
+                        logger.warning("检测到时间戳错误，重新同步服务器时间后重试...")
+                        await self._sync_server_time()
+
+                        # 使用新时间戳重试
+                        timestamp = self._get_timestamp()
+                        params = {"timestamp": timestamp}
+                        query_string = urlencode(params)
+                        signature = self._generate_signature(query_string)
+                        url = f"{self.base_url}{endpoint}?{query_string}&signature={signature}"
+
+                        response = await client.get(url, headers=headers, timeout=10.0)
+
                 response.raise_for_status()
                 data = response.json()
                 
@@ -102,8 +146,14 @@ class BinanceAccountReader(IAccountReader):
             except httpx.HTTPStatusError as e:
                 logger.error(f"Binance Account API 获取异常，HTTP 状态码: {e.response.status_code}, 内容: {e.response.text}")
                 raise
+            except httpx.RequestError as e:
+                logger.error(f"Binance Account API 网络请求失败：{type(e).__name__} - {str(e)}")
+                raise
             except Exception as e:
-                logger.error(f"获取账户数据时发生了网络或协议错误: {str(e)}")
+                logger.error(f"Binance fetch_position_detail 未知错误：{type(e).__name__} - {str(e)}")
+                raise
+            except Exception as e:
+                logger.error(f"获取账户数据时发生未知错误：{type(e).__name__} - {str(e)}")
                 raise
 
     async def fetch_position_detail(self, symbol: str) -> PositionDetail:
@@ -112,14 +162,34 @@ class BinanceAccountReader(IAccountReader):
         并发请求 /fapi/v2/positionRisk 和 /fapi/v1/openOrders。
         """
         import asyncio
+
+        # 首次调用时同步服务器时间
+        if not self._time_synced:
+            await self._sync_server_time()
+
         async with httpx.AsyncClient() as client:
             async def _signed_get(endpoint: str, **kwargs):
-                params_obj = {"timestamp": int(time.time() * 1000), **kwargs}
+                timestamp = self._get_timestamp()
+                params_obj = {"timestamp": timestamp, **kwargs}
                 query_string = urlencode(params_obj)
                 signature = self._generate_signature(query_string)
                 url = f"{self.base_url}{endpoint}?{query_string}&signature={signature}"
                 headers = {"X-MBX-APIKEY": self.api_key}
                 response = await client.get(url, headers=headers, timeout=10.0)
+
+                # 时间戳错误时重试一次
+                if response.status_code == 400:
+                    error_data = response.json() if response.content else {}
+                    if error_data.get("code") == -1021:
+                        logger.warning(f"时间戳错误，重新同步后重试：{endpoint}")
+                        await self._sync_server_time()
+                        timestamp = self._get_timestamp()
+                        params_obj = {"timestamp": timestamp, **kwargs}
+                        query_string = urlencode(params_obj)
+                        signature = self._generate_signature(query_string)
+                        url = f"{self.base_url}{endpoint}?{query_string}&signature={signature}"
+                        response = await client.get(url, headers=headers, timeout=10.0)
+
                 response.raise_for_status()
                 return response.json()
 
@@ -189,8 +259,11 @@ class BinanceAccountReader(IAccountReader):
                 )
                 
             except httpx.HTTPStatusError as e:
-                logger.error(f"Binance fetch_position_detail HTTP异常: {e.response.text}")
+                logger.error(f"Binance fetch_position_detail HTTP 异常：{e.response.status_code} - {e.response.text}")
+                raise
+            except httpx.RequestError as e:
+                logger.error(f"Binance fetch_position_detail 网络请求失败：{type(e).__name__} - {str(e)}")
                 raise
             except Exception as e:
-                logger.error(f"Binance fetch_position_detail 获取仓位数据失败: {e}")
+                logger.error(f"Binance fetch_position_detail 未知错误：{type(e).__name__} - {str(e)}")
                 raise

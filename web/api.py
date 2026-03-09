@@ -26,6 +26,42 @@ from application.position_service import PositionService
 logger = logging.getLogger(__name__)
 
 
+def _handle_binance_error(e: httpx.HTTPStatusError, context: str = "API") -> None:
+    """
+    统一处理 Binance API 错误
+
+    :param e: HTTP 异常
+    :param context: 错误上下文，用于错误消息前缀
+    """
+    status_code = e.response.status_code
+    error_detail = e.response.text
+
+    # 尝试解析错误内容
+    try:
+        error_data = e.response.json()
+        error_code = error_data.get("code", 0)
+        error_msg = error_data.get("msg", error_detail)
+    except:
+        error_code = 0
+        error_msg = error_detail
+
+    if status_code in [401, 403]:
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. Ensure the key is Read-Only. ({error_msg})",
+        )
+    elif error_code == -1021:
+        raise HTTPException(
+            status_code=503,
+            detail=f"BINANCE TIME SYNC ERROR: Local clock drift detected. ({error_msg})",
+        )
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to {context}: {error_msg}",
+        )
+
+
 def _create_response(data: Any, status: str = "success", message: Optional[str] = None) -> Dict[str, Any]:
     """
     创建标准响应格式
@@ -121,20 +157,7 @@ async def get_account_dashboard(request: Request):
             "positions": positions,
         })
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. Ensure the key is Read-Only. ({raw_msg})",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch account data from Binance: {e.response.text}",
-        )
+        _handle_binance_error(e, context="fetch account data")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -152,17 +175,7 @@ async def refresh_positions(request: Request):
         positions = await service.refresh_positions()
         return _create_response({"positions": positions})
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key. ({raw_msg})",
-            )
-        raise HTTPException(status_code=500, detail=f"Failed to fetch positions: {e.response.text}")
+        _handle_binance_error(e, context="fetch positions")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -179,17 +192,7 @@ async def get_wallet_balance(request: Request):
         balance = await service.get_wallet_balance()
         return _create_response({"wallet_balance": balance})
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key. ({raw_msg})",
-            )
-        raise HTTPException(status_code=500, detail=f"Failed to fetch wallet balance: {e.response.text}")
+        _handle_binance_error(e, context="fetch wallet balance")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -212,18 +215,7 @@ async def get_position_detail(request: Request, symbol: str):
 
         return {"status": "success", "data": dataclasses.asdict(detail)}
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code, detail=f"BINANCE API ERROR: ({raw_msg})"
-            )
-        raise HTTPException(
-            status_code=500, detail=f"Failed to fetch position data: {e.response.text}"
-        )
+        _handle_binance_error(e, context="fetch position detail")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -258,20 +250,7 @@ async def get_account_balance(request: Request):
         data = await account_service.get_balance()
         return _create_response(data)
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. ({raw_msg})",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch account data from Binance: {e.response.text}",
-        )
+        _handle_binance_error(e, context="fetch account balance")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -303,20 +282,7 @@ async def get_account_positions(request: Request):
         data = await account_service.get_positions()
         return _create_response(data)
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. ({raw_msg})",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch account data from Binance: {e.response.text}",
-        )
+        _handle_binance_error(e, context="fetch account positions")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

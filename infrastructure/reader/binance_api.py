@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from core.entities import AccountBalance, PositionDetail
+from core.entities import AccountBalance, Position, PositionDetail
 from core.interfaces import IAccountReader
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ class BinanceAccountReader(IAccountReader):
                 # Binance 返回的持仓包含所有的交易对列表，只有当 positionAmt != '0' 且不等于 0 时，才算真实持有该币种
                 positions = data.get("positions", [])
                 current_positions_count = 0
-                real_positions = []
+                position_list = []
                 for pos in positions:
                     amt_str = pos.get("positionAmt", "0")
                     # 忽略浮点数转换错误或者本身没有任何数量的空槽位
@@ -123,16 +123,23 @@ class BinanceAccountReader(IAccountReader):
                         amt = float(amt_str)
                         if abs(amt) > 0:
                             current_positions_count += 1
-                            real_positions.append({
-                                "symbol": pos.get("symbol", ""),
-                                "positionAmt": amt,
-                                "entryPrice": float(pos.get("entryPrice", 0.0)),
-                                "unrealized_pnl": float(pos.get("unrealizedProfit", pos.get("unRealizedProfit", 0.0))),
-                                "leverage": int(pos.get("leverage", 1))
-                            })
+                            entry_price = float(pos.get("entryPrice", 0.0))
+                            quantity = abs(amt)
+                            # 根据 positionAmt 的正负判断方向
+                            direction = "LONG" if amt > 0 else "SHORT"
+                            position_list.append(Position(
+                                symbol=pos.get("symbol", ""),
+                                quantity=quantity,
+                                entry_price=entry_price,
+                                leverage=int(pos.get("leverage", 1)),
+                                unrealized_pnl=float(pos.get("unrealizedProfit", pos.get("unRealizedProfit", 0.0))),
+                                position_value=quantity * entry_price,
+                                risk_amount=0.0,  # 开仓时由 PositionSizer 计算，此处默认为 0
+                                direction=direction
+                            ))
                     except ValueError:
                         pass
-                        
+
                 return AccountBalance(
                     total_wallet_balance=total_wallet_balance,
                     available_balance=available_balance,
@@ -140,7 +147,7 @@ class BinanceAccountReader(IAccountReader):
                     available_margin=available_balance, # 可用保证金等同于 available_balance
                     total_unrealized_pnl=total_unrealized_pnl,
                     current_positions_count=current_positions_count,
-                    positions=real_positions
+                    positions=position_list
                 )
 
             except httpx.HTTPStatusError as e:
@@ -148,9 +155,6 @@ class BinanceAccountReader(IAccountReader):
                 raise
             except httpx.RequestError as e:
                 logger.error(f"Binance Account API 网络请求失败：{type(e).__name__} - {str(e)}")
-                raise
-            except Exception as e:
-                logger.error(f"Binance fetch_position_detail 未知错误：{type(e).__name__} - {str(e)}")
                 raise
             except Exception as e:
                 logger.error(f"获取账户数据时发生未知错误：{type(e).__name__} - {str(e)}")

@@ -14,7 +14,8 @@ from datetime import datetime, timedelta, timezone
 from core.interfaces import IDataFeed, IAccountReader, IRepository, INotifier
 from domain.strategy.pinbar import PinbarStrategy
 from domain.risk.sizer import PositionSizer
-from core.entities import Bar, ScoringWeights
+from domain.risk.portfolio_risk import PortfolioRiskService
+from core.entities import Bar, ScoringWeights, RiskConfig
 from domain.strategy.scoring_config import ScoringConfig
 from core.exceptions import RiskLimitExceeded
 
@@ -44,6 +45,8 @@ class CryptoRadarEngine:
         self.notifier = notifier
         self.strategy = strategy
         self.risk_sizer = risk_sizer
+        self.portfolio_risk_service = PortfolioRiskService()
+        self.max_portfolio_risk_pct = 0.08  # 投资组合总风险上限 8%
 
         self.active_symbols = active_symbols or []
         self.monitor_intervals = {
@@ -61,9 +64,12 @@ class CryptoRadarEngine:
         self.latest_prices: Dict[str, float] = {}
 
         # 全局风控参数，后续应由 IConfigProvider 动态拉取，此处为快速启动赋默认值
-        self.risk_pct = 0.02
-        self.max_sl_dist = 0.035
-        self.max_leverage = 20.0
+        self.risk_config = RiskConfig(
+            risk_pct=0.02,
+            max_sl_dist=0.035,
+            max_leverage=20.0,
+            max_positions=4
+        )
         self.weights = ScoringWeights(w_shape=0.4, w_trend=0.4, w_vol=0.2)
         from core.entities import PinbarConfig
 
@@ -256,13 +262,28 @@ class CryptoRadarEngine:
                         logger.error(f"无法读取币安余额信息：{e}")
                         continue
 
-                    # 3. 风控算仓大脑计算 (纯领域计算)
+                    # 3. 检查投资组合总风险敞口
+                    portfolio_risk_metrics = self.portfolio_risk_service.calculate_portfolio_risk(
+                        positions=account_balance.positions,
+                        total_wallet_balance=account_balance.total_wallet_balance
+                    )
+
+                    if not self.portfolio_risk_service.check_portfolio_limit(
+                        portfolio_risk_metrics,
+                        self.max_portfolio_risk_pct
+                    ):
+                        logger.warning(
+                            f"🚫 投资组合总风险超限：{portfolio_risk_metrics.total_risk_pct:.2%} "
+                            f"(上限：{self.max_portfolio_risk_pct:.2%})"
+                        )
+                        continue
+
+                    # 4. 风控算仓大脑计算 (纯领域计算)
                     try:
                         sizing = self.risk_sizer.calculate(
                             signal=signal,
                             account=account_balance,
-                            risk_pct=self.risk_pct,
-                            max_leverage=self.max_leverage,
+                            risk_config=self.risk_config,
                         )
                     except RiskLimitExceeded as e:
                         logger.warning(f"🚫 信号由于硬风控被拦截丢弃：{str(e)}")

@@ -735,21 +735,21 @@ async def get_config(request: Request):
         try:
             risk_config_data = json.loads(risk_config_json)
             risk_config = {
-                "risk_pct": risk_config_data.get("risk_pct", engine.risk_pct),
-                "max_sl_dist": risk_config_data.get("max_sl_dist", engine.max_sl_dist),
-                "max_leverage": risk_config_data.get("max_leverage", engine.max_leverage),
+                "risk_pct": risk_config_data.get("risk_pct", engine.risk_config.risk_pct),
+                "max_sl_dist": risk_config_data.get("max_sl_dist", engine.risk_config.max_sl_dist),
+                "max_leverage": risk_config_data.get("max_leverage", engine.risk_config.max_leverage),
             }
         except json.JSONDecodeError:
             risk_config = {
-                "risk_pct": engine.risk_pct,
-                "max_sl_dist": engine.max_sl_dist,
-                "max_leverage": engine.max_leverage,
+                "risk_pct": engine.risk_config.risk_pct,
+                "max_sl_dist": engine.risk_config.max_sl_dist,
+                "max_leverage": engine.risk_config.max_leverage,
             }
     else:
         risk_config = {
-            "risk_pct": engine.risk_pct,
-            "max_sl_dist": engine.max_sl_dist,
-            "max_leverage": engine.max_leverage,
+            "risk_pct": engine.risk_config.risk_pct,
+            "max_sl_dist": engine.risk_config.max_sl_dist,
+            "max_leverage": engine.risk_config.max_leverage,
         }
 
     # 从数据库读取评分权重配置
@@ -854,17 +854,17 @@ async def update_config(request: Request, req: ConfigUpdateReq = Body(...)):
 
     if req.risk_config:
         if req.risk_config.risk_pct is not None:
-            engine.risk_pct = req.risk_config.risk_pct
+            engine.risk_config.risk_pct = req.risk_config.risk_pct
         if req.risk_config.max_sl_dist is not None:
-            engine.max_sl_dist = req.risk_config.max_sl_dist
+            engine.risk_config.max_sl_dist = req.risk_config.max_sl_dist
         if req.risk_config.max_leverage is not None:
-            engine.max_leverage = req.risk_config.max_leverage
+            engine.risk_config.max_leverage = req.risk_config.max_leverage
         await repo.set_secret(
             "risk_config",
             json.dumps({
-                "risk_pct": engine.risk_pct,
-                "max_sl_dist": engine.max_sl_dist,
-                "max_leverage": engine.max_leverage,
+                "risk_pct": engine.risk_config.risk_pct,
+                "max_sl_dist": engine.risk_config.max_sl_dist,
+                "max_leverage": engine.risk_config.max_leverage,
             }),
         )
 
@@ -1040,11 +1040,11 @@ async def update_risk_config(request: Request, req: RiskConfigReq):
 
     # 更新引擎内存中的配置
     if "risk_pct" in update_data:
-        engine.risk_pct = update_data["risk_pct"]
+        engine.risk_config.risk_pct = update_data["risk_pct"]
     if "max_sl_dist" in update_data:
-        engine.max_sl_dist = update_data["max_sl_dist"]
+        engine.risk_config.max_sl_dist = update_data["max_sl_dist"]
     if "max_leverage" in update_data:
-        engine.max_leverage = update_data["max_leverage"]
+        engine.risk_config.max_leverage = update_data["max_leverage"]
 
     try:
         data = await config_service.update_risk_config(update_data)

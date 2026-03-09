@@ -228,7 +228,7 @@ class CryptoRadarEngine:
                         signal = self.strategy.evaluate(
                             current_bar=current_bar,
                             history_bars=current_history,
-                            max_sl_dist=self.max_sl_dist,
+                            max_sl_dist=self.risk_config.max_sl_dist,
                             weights=self.weights,
                             higher_trend=higher_trend,
                             pinbar_config=self.pinbar_config,

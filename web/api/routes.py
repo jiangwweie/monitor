@@ -165,19 +165,9 @@ async def get_account_dashboard(request: Request):
     service: PositionService = request.app.state.position_service
 
     try:
-        # 获取数据
-        wallet_balance = await service.get_wallet_balance()
-        unrealized_pnl = await service.get_unrealized_pnl()
-        margin_balance = await service.get_margin_balance(wallet_balance, unrealized_pnl)
-        positions = await service.refresh_positions()
-
-        return _create_response({
-            "wallet_balance": wallet_balance,
-            "total_unrealized_pnl": unrealized_pnl,
-            "margin_balance": margin_balance,
-            "current_positions_count": len(positions),
-            "positions": positions,
-        })
+        # 只调用一次 Binance API 获取所有数据
+        data = await service.get_account_dashboard_data()
+        return _create_response(data)
     except httpx.HTTPStatusError as e:
         _handle_binance_error(e, context="fetch account data")
     except Exception as e:

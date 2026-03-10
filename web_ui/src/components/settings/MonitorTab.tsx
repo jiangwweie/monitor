@@ -31,8 +31,20 @@ export function MonitorTab({ initialConfig, onConfigChange }: MonitorTabProps) {
   const handleSave = async () => {
     setLoading(true);
     try {
+      // 将数组格式转换为后端期望的对象格式 { "15m": { use_trend_filter: false }, ... }
+      const monitorIntervalsPayload: Record<string, any> = {};
+      const intervals = formData.monitor_intervals;
+
+      if (Array.isArray(intervals)) {
+        for (const interval of intervals) {
+          monitorIntervalsPayload[interval] = { use_trend_filter: false };
+        }
+      } else {
+        Object.assign(monitorIntervalsPayload, intervals);
+      }
+
       const payload: any = {
-        monitor_intervals: formData.monitor_intervals,
+        monitor_intervals: monitorIntervalsPayload,
       };
 
       if (formData.symbols) {

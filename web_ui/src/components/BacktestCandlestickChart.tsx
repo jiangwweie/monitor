@@ -43,7 +43,7 @@ interface TradeLog {
   action?: number;
   action_name?: string;
   timestamp: number;
-  kline_index?: number;
+  kline_index?: number;  // K 线索引，用于精确定位
   price?: number;
   direction?: string;
 }
@@ -167,7 +167,9 @@ export function BacktestCandlestickChart({
         return true;
       })
       .map((trade) => {
-        // 根据 action_name 判断类型
+        // 根据 action_name 判断类型（防御性检查：如果未定义则跳过）
+        if (!trade.action_name) return null;
+
         const actionName = trade.action_name.toUpperCase();
         const isOpen = actionName.includes('OPEN');
         const isLong = actionName.includes('LONG');
@@ -227,7 +229,8 @@ export function BacktestCandlestickChart({
           text,
           size: 2,
         };
-      });
+      })
+      .filter(Boolean); // 过滤掉 null 值
 
     // 严格按 time 去重（保留同一时刻最后的操作）
     const uniqueMarkersMap = new Map();

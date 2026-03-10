@@ -157,15 +157,20 @@ def _execute_fmz_backtest_worker(config_string: str, strategy_config: dict) -> d
     max_sl_dist = strategy_config.get("max_sl_dist", 0.035)
 
     # 5. 实例化 BacktestExecutor（替换手工账本）
+    # 【修复 2 - 持仓防潮闸】默认禁止同向加仓，防止雪崩式开仓
     executor = BacktestExecutor(
         initial_balance=strategy_config["initial_balance"],
         fee_maker=strategy_config.get("fee_maker", 75) / 100000,
         fee_taker=strategy_config.get("fee_taker", 80) / 100000,
-        default_leverage=strategy_config.get("leverage", 10)
+        default_leverage=strategy_config.get("leverage", 10),
+        allow_add_position=False  # 禁止自动加仓
     )
 
     # 【新增】收集 K 线 OHLCV 数据，用于前端渲染 K 线图
     all_klines = []  # 存储所有 K 线 OHLCV 数据
+
+    # 【修复 - 信号雪崩】记录最后一根已评估信号的 K 线时间戳，防止同一根 K 线被重复评估
+    last_evaluated_bar_timestamp = 0
 
     bar_count = 0
     last_progress_bar = 0
@@ -223,10 +228,32 @@ def _execute_fmz_backtest_worker(config_string: str, strategy_config: dict) -> d
         history_bars = bars[:-1]
         current_bar = bars[-1]
 
+        # 【修复 - 信号雪崩】使用已收盘的上一根完整 K 线评价开仓信号
+        # 当前跳动的 current_bar 只能用于止盈止损和平仓操作，不能作为触发新形态信号的依据
+        if len(history_bars) < 2:
+            # 历史数据不足，跳过
+            continue
+
+        # 【修复 - 核心问题】检查当前要评估的 K 线是否已经被评估过
+        # FMZ 的 GetRecords() 返回累积历史，如果不检查，同一根 K 线会在后续每次循环中被重复评估！
+        signal_bar = history_bars[-1]
+        if signal_bar.timestamp <= last_evaluated_bar_timestamp:
+            # 这根 K 线之前已经评估过了，跳过（防止重复开仓）
+            # 但仍然需要更新权益和检查止损
+            prices = {current_bar.symbol: current_bar.close}
+            executor.update_equity(prices, current_bar.timestamp)
+            executor.check_stop_loss(prices, current_bar.timestamp)
+            continue
+
+        # 更新最后评估时间戳
+        last_evaluated_bar_timestamp = signal_bar.timestamp
+
+        signal_history = history_bars[:-1]  # 信号评估的历史数据再往前推一根
+
         # 策略评估
         signal = strategy.evaluate(
-            current_bar=current_bar,
-            history_bars=history_bars,
+            current_bar=signal_bar,  # ← 使用已收盘的上一根 K 线
+            history_bars=signal_history,
             max_sl_dist=max_sl_dist,
             weights=scoring_weights,
             pinbar_config=pinbar_config
@@ -234,40 +261,62 @@ def _execute_fmz_backtest_worker(config_string: str, strategy_config: dict) -> d
 
         # 执行交易
         if signal:
-            # 从 executor 获取可用保证金
-            available_margin = executor.get_available_margin()
+            symbol = current_bar.symbol
 
-            # 计算仓位数量：qty = (available_margin × risk_pct × leverage) / current_bar.close
-            risk_pct = strategy_config.get("risk_pct", 0.02)
-            leverage = strategy_config.get("leverage", 10)
+            # 【修复 3 - 信号反转平仓】如果当前有反向持仓，先平掉现有的反向单
+            opposite_direction = "SHORT" if signal.direction == "LONG" else "LONG"
+            for pos in list(executor.get_all_positions()):
+                if pos.symbol == symbol and pos.direction == opposite_direction:
+                    logger.info(f"[{symbol}] 收到反转信号 {signal.direction}，主动平仓旧有反向持仓 {pos.id}")
+                    executor.close_position(
+                        position_id=pos.id,
+                        price=current_bar.close,
+                        order_type="market",
+                        timestamp=current_bar.timestamp
+                    )
+            
+            # 【修复 2 - 全局持仓防潮闸】遍历所有持仓，检查是否已有同向持仓
+            has_same_direction = False
+            for pos in executor.get_all_positions():
+                if pos.symbol == symbol and pos.direction == signal.direction:
+                    has_same_direction = True
+                    break
 
-            qty = (available_margin * risk_pct * leverage) / current_bar.close
-
-            if qty <= 0:
-                logger.warning(f"[{current_bar.symbol}] 可用保证金不足，跳过开仓")
-                continue
-
-            # 调用 executor 开仓
-            success = executor.open_position(
-                symbol=current_bar.symbol,
-                direction=signal.direction,
-                quantity=qty,
-                price=current_bar.close,
-                leverage=leverage,
-                order_type="market",
-                stop_loss_price=signal.stop_loss,
-                timestamp=current_bar.timestamp
-            )
-
-            if not success:
-                logger.warning(f"[{current_bar.symbol}] 开仓失败，跳过本次信号")
-                continue
-
-            # 仍然调用 exchange.Buy/Sell 驱动 FMZ 引擎时间步进
-            if signal.direction == 'LONG':
-                exchange.Buy(current_bar.close, qty)
+            if has_same_direction:
+                logger.debug(f"[{symbol}] 已有{signal.direction}同向持仓，防潮闸拦截当前新信号")
             else:
-                exchange.Sell(current_bar.close, qty)
+                # 从 executor 获取可用保证金
+                available_margin = executor.get_available_margin()
+
+                # 计算仓位数量：qty = (available_margin × risk_pct × leverage) / current_bar.close
+                risk_pct = strategy_config.get("risk_pct", 0.02)
+                leverage = strategy_config.get("leverage", 10)
+
+                qty = (available_margin * risk_pct * leverage) / current_bar.close
+
+                if qty <= 0:
+                    logger.warning(f"[{current_bar.symbol}] 可用保证金不足，跳过开仓")
+                else:
+                    # 调用 executor 开仓（使用 current_bar 的价格执行，但信号来自 signal_bar）
+                    success = executor.open_position(
+                        symbol=current_bar.symbol,
+                        direction=signal.direction,
+                        quantity=qty,
+                        price=current_bar.close,  # 使用当前 K 线价格执行
+                        leverage=leverage,
+                        order_type="market",
+                        stop_loss_price=signal.stop_loss,
+                        timestamp=current_bar.timestamp  # 使用当前 K 线时间戳
+                    )
+
+                    if not success:
+                        logger.warning(f"[{current_bar.symbol}] 开仓失败，跳过本次信号")
+                    else:
+                        # 仍然调用 exchange.Buy/Sell 驱动 FMZ 引擎时间步进
+                        if signal.direction == 'LONG':
+                            exchange.Buy(current_bar.close, qty)
+                        else:
+                            exchange.Sell(current_bar.close, qty)
 
         # 每根 K 线末尾：更新权益并检查止损
         prices = {current_bar.symbol: current_bar.close}
@@ -623,6 +672,7 @@ class FMZResultParser:
                     "fee": fee,
                     "position_qty": 0,  # TradeRecord 没有 position_qty，需要从持仓聚合
                     "symbol": symbol,
+                    "kline_index": record.get("kline_index", -1),  # 【保留】K 线索引，用于前端图表定位
                 }
                 trade_logs.append(log_entry)
 

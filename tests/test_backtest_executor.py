@@ -443,3 +443,99 @@ class TestStatsCompleteness:
 
         for field in required_fields:
             assert field in stats, f"stats 应包含字段：{field}"
+
+
+class TestAntiSnowball:
+    """验证防潮闸机制（防止雪崩式加仓）"""
+
+    def test_allow_add_position_false_rejects_same_direction(self):
+        """当 allow_add_position=False 时，拒绝同向开仓"""
+        # 默认禁止加仓
+        executor = BacktestExecutor(initial_balance=100000.0, allow_add_position=False)
+
+        # 第一次开多仓
+        success1 = executor.open_position(
+            symbol="BTCUSDT",
+            direction="LONG",
+            quantity=0.1,
+            price=50000,
+            leverage=10,
+            timestamp=1700000000000
+        )
+        assert success1 is True, "第一次开仓应成功"
+
+        # 第二次尝试开同向多仓（应被拒绝）
+        success2 = executor.open_position(
+            symbol="BTCUSDT",
+            direction="LONG",
+            quantity=0.1,
+            price=51000,
+            leverage=10,
+            timestamp=1700000001000
+        )
+        assert success2 is False, "同向加仓应被拒绝（防潮闸触发）"
+
+        # 验证只有一个持仓
+        positions = executor.get_all_positions()
+        assert len(positions) == 1, "应只有一个持仓"
+        assert positions[0].quantity == 0.1, "持仓数量不应改变"
+
+    def test_allow_add_position_true_allows_same_direction(self):
+        """当 allow_add_position=True 时，允许同向加仓"""
+        executor = BacktestExecutor(initial_balance=100000.0, allow_add_position=True)
+
+        # 第一次开多仓
+        executor.open_position(
+            symbol="BTCUSDT",
+            direction="LONG",
+            quantity=0.1,
+            price=50000,
+            leverage=10,
+            timestamp=1700000000000
+        )
+
+        # 第二次开同向多仓（应成功并加仓）
+        success = executor.open_position(
+            symbol="BTCUSDT",
+            direction="LONG",
+            quantity=0.1,
+            price=51000,
+            leverage=10,
+            timestamp=1700000001000
+        )
+        assert success is True, "同向加仓应成功"
+
+        # 验证持仓数量增加
+        positions = executor.get_all_positions()
+        assert len(positions) == 1, "应只有一个持仓（加仓不创建新持仓）"
+        assert positions[0].quantity == 0.2, "持仓数量应增加到 0.2"
+
+    def test_opposite_direction_always_allowed(self):
+        """反方向开仓始终允许（不受防潮闸限制）"""
+        executor = BacktestExecutor(initial_balance=100000.0, allow_add_position=False)
+
+        # 开多仓
+        success1 = executor.open_position(
+            symbol="BTCUSDT",
+            direction="LONG",
+            quantity=0.1,
+            price=50000,
+            leverage=10,
+            timestamp=1700000000000
+        )
+        assert success1 is True
+
+        # 开空仓（应成功，因为是反方向）
+        success2 = executor.open_position(
+            symbol="BTCUSDT",
+            direction="SHORT",
+            quantity=0.1,
+            price=51000,
+            leverage=10,
+            timestamp=1700000001000
+        )
+        assert success2 is True, "反方向开仓应始终允许"
+
+        # 验证有两个持仓（多仓和空仓）
+        positions = executor.get_all_positions()
+        assert len(positions) == 2, "应有多仓和空仓两个持仓"

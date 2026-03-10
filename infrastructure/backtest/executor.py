@@ -199,7 +199,8 @@ class BacktestExecutor:
         initial_balance: float = 100000.0,
         fee_maker: float = 0.00075,   # Maker 费率 (万分之 7.5)
         fee_taker: float = 0.0008,    # Taker 费率 (万分之 8)
-        default_leverage: float = 10.0
+        default_leverage: float = 10.0,
+        allow_add_position: bool = False  # 【新增】是否允许同向加仓
     ):
         """
         初始化回测执行器
@@ -209,12 +210,14 @@ class BacktestExecutor:
             fee_maker: Maker 手续费率 (默认 0.075%)
             fee_taker: Taker 手续费率 (默认 0.08%)
             default_leverage: 默认杠杆倍数
+            allow_add_position: 是否允许同向加仓（默认 False，禁止雪崩式加仓）
         """
         # 账户状态
         self.initial_balance = initial_balance
         self.balance = initial_balance          # 当前余额 (已实现 PnL - 累计手续费)
         self.cumulative_fees = 0.0              # 累计手续费
         self.default_leverage = default_leverage
+        self.allow_add_position = allow_add_position  # 【新增】防潮闸开关
 
         # 手续费率
         self.fee_maker = fee_maker
@@ -329,7 +332,17 @@ class BacktestExecutor:
         existing_position = self._get_position_by_symbol(symbol)
 
         if existing_position and existing_position.direction == direction:
-            # 同向加仓：更新平均成本
+            # 【修复 2 - 持仓防潮闸】如果禁止加仓，直接拒绝同向开仓请求
+            if not self.allow_add_position:
+                self._log_rejection(
+                    symbol, "OPEN",
+                    f"已有{direction}持仓，禁止同向加仓（防潮闸）",
+                    timestamp
+                )
+                logger.info(f"[{symbol}] 防潮闸触发：已有{direction}持仓，拒绝同向开仓")
+                return False
+
+            # 允许加仓：更新平均成本
             return self._add_to_position(
                 existing_position,
                 quantity, price, leverage,

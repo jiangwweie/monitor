@@ -186,34 +186,79 @@ export function BacktestResultChart({
   }, [equityCurve, initialBalance]);
 
   // ==========================================
-  // 交易标记：严格的节点标注过滤
+  // 交易标记：统一的节点标注逻辑
   // ==========================================
   useEffect(() => {
     if (!chartRef.current || !seriesRef.current) return;
     if (!tradeLogs || tradeLogs.length === 0) return;
 
-    // 硬编码严格过滤：只渲染 action_name 为 BUY 或 SELL 的交易
+    // 统一使用 action_name 复合字段：OPEN_LONG, OPEN_SHORT, CLOSE_LONG, CLOSE_SHORT
     const markers = tradeLogs
       .filter((trade) => {
-        // 严格检查：必须是已知的 action_name
+        // 严格检查：必须有 action_name
         if (!trade.action_name) return false;
-        if (trade.action_name !== 'BUY' && trade.action_name !== 'SELL') return false;
         // 额外验证：必须有有效的时间戳和价格
         if (!trade.timestamp || trade.timestamp <= 0) return false;
         if (!trade.price || trade.price <= 0) return false;
         return true;
       })
       .map((trade) => {
-        const isBuy = trade.action_name === 'BUY';
+        // 防御性检查：如果 action_name 未定义则跳过
+        if (!trade.action_name) return null;
+
+        const actionName = trade.action_name.toUpperCase();
+        const isOpen = actionName.includes('OPEN');
+        const isLong = actionName.includes('LONG');
+        const isShort = actionName.includes('SHORT');
+
+        // 确定箭头位置、颜色和文字
+        let position: 'belowBar' | 'aboveBar';
+        let color: string;
+        let shape: 'arrowUp' | 'arrowDown';
+        let text: string;
+
+        if (isOpen && isLong) {
+          // OPEN_LONG: 绿色向上箭头，belowBar
+          position = 'belowBar';
+          color = '#10b981';
+          shape = 'arrowUp';
+          text = '多';
+        } else if (isOpen && isShort) {
+          // OPEN_SHORT: 红色向下箭头，aboveBar
+          position = 'aboveBar';
+          color = '#f43f5e';
+          shape = 'arrowDown';
+          text = '空';
+        } else if (actionName.includes('CLOSE_LONG')) {
+          // CLOSE_LONG: 橙色向上箭头，belowBar（平多获利）
+          position = 'belowBar';
+          color = '#f97316';
+          shape = 'arrowUp';
+          text = '平多';
+        } else if (actionName.includes('CLOSE_SHORT')) {
+          // CLOSE_SHORT: 橙色向下箭头，aboveBar（平空获利）
+          position = 'aboveBar';
+          color = '#f97316';
+          shape = 'arrowDown';
+          text = '平空';
+        } else {
+          // 未知类型：使用默认标记
+          position = 'aboveBar';
+          color = '#71717a';
+          shape = 'arrowDown';
+          text = '';
+        }
+
         return {
           time: (trade.timestamp / 1000) as any,
-          position: isBuy ? 'belowBar' as const : 'aboveBar' as const,
-          color: isBuy ? '#10b981' : '#f43f5e',
-          shape: isBuy ? 'arrowUp' as const : 'arrowDown' as const,
-          text: isBuy ? '多' : '空',
+          position,
+          color,
+          shape,
+          text,
           size: 2,
         };
-      });
+      })
+      .filter(Boolean); // 过滤掉 null 值
 
     // 只有有效标记才设置
     if (markers.length > 0) {

@@ -22,6 +22,10 @@ from infrastructure.reader.binance_api import BinanceAccountReader
 from domain.services import ConfigService, AccountService, SignalService
 from application.signal_query_service import SignalQueryService
 from application.position_service import PositionService
+from application.backtest_service import get_backtest_service, shutdown_backtest_service
+
+# 引入回测路由（本地导入）
+from .backtest import router as backtest_router
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +120,9 @@ app.add_middleware(
 )
 
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+# 注册回测 API 路由
+app.include_router(backtest_router, prefix="/api")
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -16,21 +16,21 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # PID 文件路径
 PID_DIR="$PROJECT_ROOT/logs"
-BACKEND_PID="$PID_DIR/backend.pid"
-FRONTEND_PID="$PID_DIR/frontend.pid"
+BACKEND_PID_FILE="$PID_DIR/backend.pid"
+FRONTEND_PID_FILE="$PID_DIR/frontend.pid"
 
 echo -e "${RED}===> 正在停止 CryptoRadar 系统...${NC}"
 
 # 停止后端进程
-if [ -f "$BACKEND_PID" ]; then
-    OLD_PID=$(cat "$BACKEND_PID")
+if [ -f "$BACKEND_PID_FILE" ]; then
+    OLD_PID=$(cat "$BACKEND_PID_FILE")
     if ps -p "$OLD_PID" > /dev/null 2>&1; then
         kill -9 "$OLD_PID" 2>/dev/null
         echo -e "${RED}  已停止后端进程 (PID: $OLD_PID)${NC}"
     else
         echo -e "${RED}  后端进程未运行${NC}"
     fi
-    rm -f "$BACKEND_PID"
+    rm -f "$BACKEND_PID_FILE"
 else
     # 备用方案：通过进程名查找
     ps aux | grep "main.py" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null
@@ -38,15 +38,15 @@ else
 fi
 
 # 停止前端进程
-if [ -f "$FRONTEND_PID" ]; then
-    OLD_PID=$(cat "$FRONTEND_PID")
+if [ -f "$FRONTEND_PID_FILE" ]; then
+    OLD_PID=$(cat "$FRONTEND_PID_FILE")
     if ps -p "$OLD_PID" > /dev/null 2>&1; then
         kill -9 "$OLD_PID" 2>/dev/null
         echo -e "${RED}  已停止前端进程 (PID: $OLD_PID)${NC}"
     else
         echo -e "${RED}  前端进程未运行${NC}"
     fi
-    rm -f "$FRONTEND_PID"
+    rm -f "$FRONTEND_PID_FILE"
 else
     # 备用方案：通过进程名查找
     ps aux | grep -E "npm|vite" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null

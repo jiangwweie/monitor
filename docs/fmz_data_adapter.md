@@ -188,32 +188,44 @@ def test_pinbar_with_fmz_data():
         print(f"信号：{signal.direction} @ {signal.entry_price}")
 ```
 
-### 实际回测场景
+### 实际回测场景 (v2.0 架构)
 
 ```python
-class FMZAdapter:
-    """回测适配器"""
-
-    def __init__(self, fmz_records: List[Dict], symbol: str, interval: str, ...):
-        # 初始化时一次性转换
-        self.bars = fmz_records_to_bars(fmz_records, symbol, interval)
-        self.strategy = PinbarStrategy()
-
-    async def run(self):
-        """执行回测"""
-        for i in range(60, len(self.bars)):  # 至少需要 60 根 K 线计算 EMA
-            history = self.bars[:i]
-            current = self.bars[i]
-
-            # 直接调用现有的 Pinbar 策略
-            signal = self.strategy.evaluate(
-                current_bar=current,
-                history_bars=history,
-                max_sl_dist=0.035
-            )
-
-            if signal:
-                self._execute_signal(signal)
+def execute_fmz_backtest(config_string: str, strategy_config: dict) -> dict:
+    """基于 VCtx 的回测运行器"""
+    from fmz import *
+    from core.entities import PinbarConfig
+    
+    # 初始化 FMZ 引擎
+    task = VCtx(config_string)
+    strategy = PinbarStrategy(...)
+    
+    while True:
+        # 1. 从底层获取数据
+        records = exchange.GetRecords()
+        if not records:
+            break
+            
+        # 2. 轻量级转换 (复用业务大脑)
+        bars_history = fmz_records_to_bars(records[:-1], symbol="BTC", interval="1h")
+        current_bar = fmz_records_to_bars([records[-1]], symbol="BTC", interval="1h")[0]
+        
+        # 3. 策略评估
+        signal = strategy.evaluate(
+            current_bar=current_bar,
+            history_bars=bars_history,
+            max_sl_dist=0.035
+        )
+        
+        # 4. 执行 (直接调用 FMZ API)
+        if signal:
+            if signal.direction == 'LONG':
+                exchange.Buy(current_bar.close, 1.0)
+            else:
+                exchange.Sell(current_bar.close, 1.0)
+                
+    # 返回丰富的结果供外层解析
+    return task.Join()
 ```
 
 ---

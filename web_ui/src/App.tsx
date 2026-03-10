@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Activity, Radar, Wallet, Settings2, Clock, Radar as RadarIcon } from "lucide-react";
+import { Activity, Radar, Wallet, Settings2, Clock, Radar as RadarIcon, FlaskConical } from "lucide-react";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -11,6 +11,7 @@ import { SignalRadar } from "@/components/SignalRadar";
 import { Positions } from "@/components/Positions";
 import { Settings } from "@/components/Settings";
 import { PositionDetailModal } from "@/components/PositionDetailModal";
+import { BacktestLab } from "@/pages/BacktestLab";
 
 const AVAILABLE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
 
@@ -297,6 +298,13 @@ export default function App() {
                 信号雷达
               </TabsTrigger>
               <TabsTrigger
+                value="backtest"
+                className="rounded-xl px-6 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:shadow-none transition-all"
+              >
+                <FlaskConical className="w-4 h-4 mr-2" />
+                回测实验室
+              </TabsTrigger>
+              <TabsTrigger
                 value="positions"
                 className="rounded-xl px-6 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:shadow-none transition-all"
               >
@@ -329,6 +337,11 @@ export default function App() {
                 tableColumns={tableColumns}
                 onTableColumnsChange={setTableColumns}
               />
+            </TabsContent>
+
+            {/* Backtest Lab Tab */}
+            <TabsContent value="backtest">
+              <BacktestLab />
             </TabsContent>
 
             {/* Positions Tab - 支持外部刷新触发器 */}

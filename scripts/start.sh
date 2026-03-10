@@ -20,8 +20,8 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 LOGS_DIR="$PROJECT_ROOT/logs"
 BACKEND_LOG="$LOGS_DIR/backend.log"
 FRONTEND_LOG="$LOGS_DIR/frontend.log"
-BACKEND_PID="$LOGS_DIR/backend.pid"
-FRONTEND_PID="$LOGS_DIR/frontend.pid"
+BACKEND_PID_FILE="$LOGS_DIR/backend.pid"
+FRONTEND_PID_FILE="$LOGS_DIR/frontend.pid"
 
 echo -e "${BLUE}===> 正在准备启动 CryptoRadar...${NC}"
 
@@ -34,22 +34,22 @@ mkdir -p "$LOGS_DIR"
 echo -e "${YELLOW}步骤 1: 停止现有的前后端进程...${NC}"
 
 # 通过 PID 文件停止进程（更精确）
-if [ -f "$BACKEND_PID" ]; then
-    OLD_PID=$(cat "$BACKEND_PID")
+if [ -f "$BACKEND_PID_FILE" ]; then
+    OLD_PID=$(cat "$BACKEND_PID_FILE")
     if ps -p "$OLD_PID" > /dev/null 2>&1; then
         kill -9 "$OLD_PID" 2>/dev/null
         echo -e "${GREEN}  已停止后端进程 (PID: $OLD_PID)${NC}"
     fi
-    rm -f "$BACKEND_PID"
+    rm -f "$BACKEND_PID_FILE"
 fi
 
-if [ -f "$FRONTEND_PID" ]; then
-    OLD_PID=$(cat "$FRONTEND_PID")
+if [ -f "$FRONTEND_PID_FILE" ]; then
+    OLD_PID=$(cat "$FRONTEND_PID_FILE")
     if ps -p "$OLD_PID" > /dev/null 2>&1; then
         kill -9 "$OLD_PID" 2>/dev/null
         echo -e "${GREEN}  已停止前端进程 (PID: $OLD_PID)${NC}"
     fi
-    rm -f "$FRONTEND_PID"
+    rm -f "$FRONTEND_PID_FILE"
 fi
 
 # 备用方案：通过进程名查找并清理
@@ -85,7 +85,7 @@ else
 fi
 
 # 保存 PID
-echo "$BACKEND_PID" > "$BACKEND_PID"
+echo "$BACKEND_PID" > "$BACKEND_PID_FILE"
 echo -e "${GREEN}  后端已启动 (PID: $BACKEND_PID), 日志：$BACKEND_LOG${NC}"
 
 # 等待后端启动
@@ -117,7 +117,7 @@ nohup npm run dev -- --port $FRONTEND_PORT > "$FRONTEND_LOG" 2>&1 &
 FRONTEND_PID=$!
 
 # 保存 PID
-echo "$FRONTEND_PID" > "$FRONTEND_PID"
+echo "$FRONTEND_PID" > "$FRONTEND_PID_FILE"
 echo -e "${GREEN}  前端已启动 (PID: $FRONTEND_PID), 日志：$FRONTEND_LOG${NC}"
 
 # =================================================================

@@ -31,7 +31,11 @@ from infrastructure.repo.sqlite_repo import SQLiteRepo
 from application.monitor_engine import CryptoRadarEngine
 
 # 引入原有的 Web API
-from web.api import app
+from web.api.routes import app
+
+# 引入回测服务
+from application.backtest_service import get_backtest_service, shutdown_backtest_service
+from application.optimization_service import get_optimization_service, shutdown_optimization_service
 
 # 设置全局纯净日志格式
 LOG_DIR = os.getenv("LOG_DIR")
@@ -124,6 +128,8 @@ async def lifespan(fastapi_app: FastAPI):
     启动时，在后台调度引擎的大循环。关闭时释放资源。
     """
     global engine_task
+
+    logger = logging.getLogger(__name__)
 
     engine = assemble_engine()
 
@@ -237,6 +243,16 @@ async def lifespan(fastapi_app: FastAPI):
     from application.position_service import PositionService
     fastapi_app.state.position_service = PositionService(engine.account_reader, engine.repo)
 
+    # 初始化回测服务（进程池）
+    backtest_svc = get_backtest_service()
+    fastapi_app.state.backtest_service = backtest_svc
+    logger.info("回测服务已初始化（ProcessPoolExecutor）")
+
+    # 初始化参数优化服务（依赖 BacktestService）
+    opt_svc = get_optimization_service(backtest_svc)
+    fastapi_app.state.optimization_service = opt_svc
+    logger.info("参数优化服务已初始化")
+
     # 不阻塞地在后台事件循环中拉起监察大循环
     engine_task = asyncio.create_task(engine.start())
 
@@ -250,6 +266,14 @@ async def lifespan(fastapi_app: FastAPI):
         except asyncio.CancelledError:
             pass
         logging.info("后台调度器引擎已平滑关机终止。")
+
+    # 关闭回测服务（进程池）
+    shutdown_backtest_service()
+    logging.info("回测服务已关闭。")
+
+    # 关闭参数优化服务
+    shutdown_optimization_service()
+    logging.info("参数优化服务已关闭。")
 
 
 # 重新绑定生命周期至前一阶段导入的 app

@@ -61,3 +61,6 @@ Thumbs.db
 
 # 配置文件
 config/exported_config_*.yaml
+
+# Vite 进程 ID 文件（纯数字文件名，仅在根目录和 web_ui）
+/[0-9]*

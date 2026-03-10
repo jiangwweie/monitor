@@ -1,7 +1,25 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wallet, Wifi } from "lucide-react";
+import { Wallet, Wifi, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+
+interface Position {
+  symbol: string;
+  positionAmt: number;
+  entryPrice: number;
+  unrealized_pnl: number;
+  leverage: number;
+}
+
+interface DashboardData {
+  wallet_balance: number;
+  total_unrealized_pnl: number;
+  margin_balance: number;
+  current_positions_count: number;
+  positions: Position[];
+}
 
 interface DashboardProps {
   systemStatus: {
@@ -10,29 +28,44 @@ interface DashboardProps {
     api_weight_usage: number;
     uptime: string;
   };
-  dashboardData: {
-    total_wallet_balance: number;
-    available_balance: number;
-    total_balance?: number;
-    available_margin?: number;
-    total_unrealized_pnl: number;
-    current_positions_count: number;
-    positions: any[];
-  } | null;
   realtimePrices: Record<string, number>;
   activeSymbols: string[];
-  resetCountdown?: number;
   onOpenPositionDetail: (symbol: string) => void;
 }
 
 export function Dashboard({
   systemStatus,
-  dashboardData,
   realtimePrices,
   activeSymbols,
-  resetCountdown,
   onOpenPositionDetail,
 }: DashboardProps) {
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // 获取仪表盘数据
+  const fetchDashboardData = async () => {
+    try {
+      const res = await fetch("http://localhost:8000/api/account/dashboard");
+      if (!res.ok) throw new Error("Dashboard data fetch failed");
+      const response = await res.json();
+      setDashboardData(response.data);  // 解包 data 字段
+    } catch {
+      toast.error("获取账户数据失败", {
+        description: "请检查后端服务状态"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 初始加载时获取数据
+  useEffect(() => {
+    fetchDashboardData();
+    // 60 秒轮询一次
+    const interval = setInterval(fetchDashboardData, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* System Health Cards */}
@@ -50,7 +83,6 @@ export function Dashboard({
             <div className="flex justify-between items-end text-sm mb-2 text-zinc-500 dark:text-zinc-400">
               <span>当前用量</span>
               <div className="text-right">
-                <span className="text-xs mr-2 opacity-60">重置倒计时：{resetCountdown}s</span>
                 <span
                   className={
                     systemStatus.api_weight_usage > 80
@@ -116,7 +148,7 @@ export function Dashboard({
           >
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">{sym}</p>
             <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 font-mono">
-              {realtimePrices[sym] ? `$${realtimePrices[sym].toFixed(realtimePrices[sym] < 10 ? 4 : 2)}` : "---"}
+              {realtimePrices[sym] ? `$${realtimePrices[sym].toFixed(realtimePrices[sym] < 1 ? 4 : 2)}` : "---"}
             </p>
           </div>
         ))}
@@ -130,31 +162,41 @@ export function Dashboard({
               <Wallet className="w-5 h-5 text-blue-400" />
               账户与持仓
             </CardTitle>
-            {dashboardData && (
-              <Badge
-                variant="outline"
-                className="bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+            <div className="flex items-center gap-2">
+              {dashboardData && (
+                <Badge
+                  variant="outline"
+                  className="bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                >
+                  {dashboardData.current_positions_count} 个活跃持仓
+                </Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchDashboardData}
+                disabled={loading}
+                className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-300 h-8"
               >
-                {dashboardData.current_positions_count} 个活跃持仓
-              </Badge>
-            )}
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {dashboardData ? (
+          {loading && !dashboardData ? (
+            <div className="p-12 text-center text-zinc-500">
+              <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin opacity-50" />
+              <p>加载账户数据中...</p>
+            </div>
+          ) : dashboardData ? (
             <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-zinc-200 dark:divide-white/5">
-              {/* Balance Info */}
+              {/* Balance Info - 新字段展示 */}
               <div className="p-6 md:col-span-1 space-y-6">
                 <div>
-                  <p className="text-sm text-zinc-500 mb-1">账户总资产</p>
+                  <p className="text-sm text-zinc-500 mb-1">钱包余额（初始保证金）</p>
                   <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
-                    ${Number(dashboardData.total_wallet_balance).toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-500 mb-1">可用保证金</p>
-                  <p className="text-xl font-semibold text-zinc-700 dark:text-zinc-300">
-                    ${Number(dashboardData.available_balance).toFixed(2)}
+                    ${Number(dashboardData.wallet_balance).toFixed(2)}
                   </p>
                 </div>
                 <div className="pt-4 border-t border-zinc-200 dark:border-white/10">
@@ -167,7 +209,13 @@ export function Dashboard({
                     }`}
                   >
                     {dashboardData.total_unrealized_pnl > 0 ? "+" : ""}
-                    {Number(dashboardData.total_unrealized_pnl).toFixed(2)}
+                    ${Number(dashboardData.total_unrealized_pnl).toFixed(2)}
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-zinc-200 dark:border-white/10">
+                  <p className="text-sm text-zinc-500 mb-1">保证金余额</p>
+                  <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                    ${Number(dashboardData.margin_balance).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -208,7 +256,7 @@ export function Dashboard({
                               </Badge>
                             </div>
                             <p className="text-xs text-zinc-500">
-                              仓位：{Math.abs(pos.positionAmt)} @ {Number(pos.entryPrice).toFixed(4)}
+                              仓位：{Math.abs(pos.positionAmt)} @ ${Number(pos.entryPrice).toFixed(4)}
                             </p>
                           </div>
                         </div>
@@ -221,7 +269,7 @@ export function Dashboard({
                             }`}
                           >
                             {pos.unrealized_pnl > 0 ? "+" : ""}
-                            {Number(pos.unrealized_pnl).toFixed(2)}
+                            ${Number(pos.unrealized_pnl).toFixed(2)}
                           </p>
                           <p className="text-xs text-zinc-500">未实现盈亏</p>
                           <Button

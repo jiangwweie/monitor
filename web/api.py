@@ -5,7 +5,7 @@ Web API 模块
 
 import time
 from typing import Optional, List, Dict, Literal, Any
-from fastapi import FastAPI, Request, Query, Body, HTTPException
+from fastapi import FastAPI, Request, Query, Body, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,8 +20,46 @@ from domain.strategy.scoring_config import ScoringConfig
 from domain.strategy.scoring_factory import ScoringStrategyFactory
 from infrastructure.reader.binance_api import BinanceAccountReader
 from domain.services import ConfigService, AccountService, SignalService
+from application.signal_query_service import SignalQueryService
+from application.position_service import PositionService
 
 logger = logging.getLogger(__name__)
+
+
+def _handle_binance_error(e: httpx.HTTPStatusError, context: str = "API") -> None:
+    """
+    统一处理 Binance API 错误
+
+    :param e: HTTP 异常
+    :param context: 错误上下文，用于错误消息前缀
+    """
+    status_code = e.response.status_code
+    error_detail = e.response.text
+
+    # 尝试解析错误内容
+    try:
+        error_data = e.response.json()
+        error_code = error_data.get("code", 0)
+        error_msg = error_data.get("msg", error_detail)
+    except:
+        error_code = 0
+        error_msg = error_detail
+
+    if status_code in [401, 403]:
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. Ensure the key is Read-Only. ({error_msg})",
+        )
+    elif error_code == -1021:
+        raise HTTPException(
+            status_code=503,
+            detail=f"BINANCE TIME SYNC ERROR: Local clock drift detected. ({error_msg})",
+        )
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to {context}: {error_msg}",
+        )
 
 
 def _create_response(data: Any, status: str = "success", message: Optional[str] = None) -> Dict[str, Any]:
@@ -51,8 +89,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "http://localhost:5174",
         "http://localhost:5176",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
         "http://127.0.0.1:5176",
     ],
     allow_credentials=True,
@@ -95,45 +135,100 @@ async def get_system_status(request: Request):
 # ==========================================
 @app.get("/api/account/dashboard")
 async def get_account_dashboard(request: Request):
-    """获取真实账户余额和持仓列表。验证 Key 是否只读与有效。"""
-    repo = request.app.state.repo
-    api_key = await repo.get_secret("binance_api_key")
-    api_secret = await repo.get_secret("binance_api_secret")
+    """
+    账户仪表盘数据
+    返回新字段结构：wallet_balance, total_unrealized_pnl, margin_balance
 
-    if not api_key or not api_secret:
-        raise HTTPException(
-            status_code=400,
-            detail="Binance API keys are not configured. Please set them in Settings.",
-        )
+    优化：只调用 1 次 Binance API，复用账户数据，避免重复请求
+    """
+    # 获取持仓服务（从 app.state 获取）
+    service: PositionService = request.app.state.position_service
 
-    reader = BinanceAccountReader(api_key=api_key, api_secret=api_secret)
     try:
-        balance = await reader.fetch_account_balance()
-        return {
-            "status": "success",
-            "data": {
-                "total_wallet_balance": balance.total_wallet_balance,
-                "available_balance": balance.available_balance,
-                "total_unrealized_pnl": balance.total_unrealized_pnl,
-                "current_positions_count": balance.current_positions_count,
-                "positions": balance.positions,
-            },
-        }
+        # 只调用 1 次 API，获取完整账户数据
+        account = await service.account_reader.fetch_account_balance()
+
+        wallet_balance = account.total_wallet_balance
+        unrealized_pnl = account.total_unrealized_pnl
+        margin_balance = wallet_balance + unrealized_pnl
+
+        # 复用 positions，不再重复调用 API
+        positions_data = [
+            {
+                "symbol": p.symbol,
+                "positionAmt": p.quantity * (1 if p.direction == "LONG" else -1),
+                "entryPrice": p.entry_price,
+                "unrealized_pnl": p.unrealized_pnl,
+                "leverage": p.leverage,
+            }
+            for p in (account.positions or [])
+        ]
+
+        return _create_response({
+            "wallet_balance": wallet_balance,
+            "total_unrealized_pnl": unrealized_pnl,
+            "margin_balance": margin_balance,
+            "current_positions_count": len(positions_data),
+            "positions": positions_data,
+        })
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. Ensure the key is Read-Only. ({raw_msg})",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch account data from Binance: {e.response.text}",
-        )
+        _handle_binance_error(e, context="fetch account data")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/positions/refresh")
+async def refresh_positions(request: Request):
+    """
+    实时刷新持仓
+    从币安 API 获取最新持仓数据
+
+    优化：一次 API 调用获取完整账户数据，避免重复请求
+    """
+    # 获取持仓服务（从 app.state 获取）
+    service: PositionService = request.app.state.position_service
+
+    try:
+        # 一次 API 调用获取完整账户数据
+        account = await service.get_full_account_data()
+        positions = account.positions if account.positions else []
+
+        # 转换为前端格式
+        positions_data = [
+            {
+                "symbol": p.symbol,
+                "positionAmt": p.quantity * (1 if p.direction == "LONG" else -1),
+                "entryPrice": p.entry_price,
+                "unrealized_pnl": p.unrealized_pnl,
+                "leverage": p.leverage,
+            }
+            for p in positions
+        ]
+
+        return _create_response({"positions": positions_data})
+    except httpx.HTTPStatusError as e:
+        _handle_binance_error(e, context="fetch positions")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/account/wallet-balance")
+async def get_wallet_balance(request: Request):
+    """
+    获取钱包余额（初始保证金）
+
+    优化：一次 API 调用获取完整账户数据，避免重复请求
+    """
+    # 获取持仓服务（从 app.state 获取）
+    service: PositionService = request.app.state.position_service
+
+    try:
+        # 一次 API 调用获取完整账户数据
+        account = await service.get_full_account_data()
+        wallet_balance = account.total_wallet_balance if account else 0.0
+        return _create_response({"wallet_balance": wallet_balance})
+    except httpx.HTTPStatusError as e:
+        _handle_binance_error(e, context="fetch wallet balance")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -156,18 +251,7 @@ async def get_position_detail(request: Request, symbol: str):
 
         return {"status": "success", "data": dataclasses.asdict(detail)}
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code, detail=f"BINANCE API ERROR: ({raw_msg})"
-            )
-        raise HTTPException(
-            status_code=500, detail=f"Failed to fetch position data: {e.response.text}"
-        )
+        _handle_binance_error(e, context="fetch position detail")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -202,20 +286,7 @@ async def get_account_balance(request: Request):
         data = await account_service.get_balance()
         return _create_response(data)
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. ({raw_msg})",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch account data from Binance: {e.response.text}",
-        )
+        _handle_binance_error(e, context="fetch account balance")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -247,20 +318,7 @@ async def get_account_positions(request: Request):
         data = await account_service.get_positions()
         return _create_response(data)
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code
-        if status_code in [401, 403]:
-            try:
-                raw_msg = e.response.json().get("msg", "Unknown error")
-            except:
-                raw_msg = e.response.text
-            raise HTTPException(
-                status_code=status_code,
-                detail=f"BINANCE API ERROR: Invalid API Key or IP not allowed. ({raw_msg})",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch account data from Binance: {e.response.text}",
-        )
+        _handle_binance_error(e, context="fetch account positions")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -279,10 +337,11 @@ async def get_signals(
     min_score: Optional[int] = None,
     max_score: Optional[int] = None,
     source: Optional[str] = None,
+    quality_tier: Optional[str] = None,
     sort_by: str = Query("timestamp", regex="^(timestamp|score)$"),
     order: str = Query("desc", regex="^(asc|desc)$"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    size: int = Query(20, ge=1, le=200),
 ):
     """
     分页、多维度历史信号检索接口
@@ -296,37 +355,69 @@ async def get_signals(
     - min_score: 最低分数
     - max_score: 最高分数
     - source: 信号来源 "realtime" 或 "history_scan"
+    - quality_tier: 信号等级 "A"、"B" 或 "C"
     - sort_by: 排序字段 "timestamp" 或 "score"
     - order: 排序方向 "asc" 或 "desc"
     - page: 页码，从 1 开始
-    - page_size: 每页数量，最大 200
+    - size: 每页数量，最大 200 (默认 20)
     """
-    repo = request.app.state.repo
-
-    # 使用服务层获取数据
-    signal_service = SignalService(repo)
+    # 获取信号查询服务（从 app.state 获取）
+    service: SignalQueryService = request.app.state.signal_query_service
 
     # 解析逗号分隔的参数
-    symbol_list = symbols.split(",") if symbols else None
-    interval_list = intervals.split(",") if intervals else None
-    direction_list = directions.split(",") if directions else None
+    symbols_list = symbols.split(",") if symbols else None
+    intervals_list = intervals.split(",") if intervals else None
+    directions_list = directions.split(",") if directions else None
 
     try:
-        data = await signal_service.get_signals(
-            symbols=symbol_list,
-            intervals=interval_list,
-            directions=direction_list,
+        # 使用 SignalQueryService 查询
+        result = await service.query_signals(
+            symbols=symbols_list,
+            intervals=intervals_list,
+            directions=directions_list,
             start_time=start_time,
             end_time=end_time,
             min_score=min_score,
             max_score=max_score,
+            quality_tier=quality_tier,
             source=source,
+            page=page,
+            size=size,
             sort_by=sort_by,
             order=order,
-            page=page,
-            page_size=page_size,
         )
-        return _create_response(data)
+
+        # 转换为字典列表
+        def signal_to_dict(s) -> dict:
+            return {
+                "id": s.id,
+                "symbol": s.symbol,
+                "interval": s.interval,
+                "direction": s.direction,
+                "entry_price": s.entry_price,
+                "stop_loss": s.stop_loss,
+                "take_profit_1": s.take_profit_1,
+                "timestamp": s.timestamp,
+                "reason": s.reason,
+                "sl_distance_pct": s.sl_distance_pct,
+                "score": s.score,
+                "score_details": s.score_details,
+                "shadow_ratio": s.shadow_ratio,
+                "ema_distance": s.ema_distance,
+                "volatility_atr": s.volatility_atr,
+                "source": s.source,
+                "is_contrarian": s.is_contrarian,
+                "is_shape_divergent": s.is_shape_divergent,
+                "quality_tier": s.quality_tier,
+            }
+
+        # 直接返回分页数据，不使用 _create_response 包裹
+        return {
+            "items": [signal_to_dict(s) for s in result.items],
+            "total": result.total,
+            "page": result.page,
+            "size": result.size,
+        }
     except Exception as e:
         logger.error(f"信号查询失败：{e}")
         raise HTTPException(status_code=500, detail=f"信号查询失败：{str(e)}")
@@ -345,6 +436,15 @@ async def delete_signals(request: Request, req: DeleteSignalsReq):
         return {"status": "success", "deleted_count": 0}
 
     deleted = await repo.delete_signals(req.signal_ids)
+    return {"status": "success", "deleted_count": deleted}
+
+
+@app.delete("/api/signals/clear")
+async def clear_all_signals(request: Request):
+    """清空所有信号记录"""
+    repo = request.app.state.repo
+
+    deleted = await repo.clear_all_signals()
     return {"status": "success", "deleted_count": deleted}
 
 
@@ -412,6 +512,14 @@ async def submit_history_check(request: Request, req: HistoryCheckReq = Body(...
 async def get_history_check_status(request: Request, task_id: str):
     """
     轮询历史扫描任务的执行状态。
+
+    返回字段说明:
+    - task_id: 任务 ID
+    - status: 任务状态 (running/completed/failed)
+    - progress: 进度 (0-100)
+    - message: 当前状态描述
+    - result: 扫描结果 (完成后返回)
+    - config: 扫描配置 (symbol, interval, start_date, end_date)
     """
     scanner = getattr(request.app.state, "history_scanner", None)
 
@@ -428,6 +536,10 @@ async def get_history_check_status(request: Request, task_id: str):
         "progress": task.progress,
         "message": task.message,
     }
+
+    # 添加 config 字段
+    if task.config is not None:
+        response["config"] = task.config
 
     if task.result is not None:
         response["result"] = task.result
@@ -506,6 +618,7 @@ class ExchangeSettingsConfig(BaseModel):
 
 
 class WebhookSettingsConfig(BaseModel):
+    # 已废弃：推送配置请通过 .env 文件配置
     global_push_enabled: Optional[bool] = None
     feishu_enabled: Optional[bool] = None
     feishu_secret: Optional[str] = None
@@ -609,19 +722,48 @@ class ConfigUpdateReq(BaseModel):
     )
 
 
+async def get_pinbar_config_from_db(repo, engine_pinbar_config):
+    """从数据库读取 pinbar 配置，如果数据库中没有则返回引擎配置"""
+    pinbar_config_json = await repo.get_secret("pinbar_config")
+    if pinbar_config_json:
+        try:
+            return json.loads(pinbar_config_json)
+        except json.JSONDecodeError:
+            pass
+    import dataclasses
+    return dataclasses.asdict(engine_pinbar_config) if engine_pinbar_config else {}
+
+
+
 @app.get("/api/config")
 async def get_config(request: Request):
     engine = request.app.state.engine
     repo = engine.repo
 
-    # 真实情况下需查 DB 看 Secret 有没有
-    wecom_enabled_val = await repo.get_secret("wecom_enabled")
-    wecom_enabled = wecom_enabled_val.lower() == "true" if wecom_enabled_val else False
+    # 从数据库读取 system_enabled
+    system_enabled_val = await repo.get_secret("system_enabled")
+    system_enabled = system_enabled_val.lower() == "true" if system_enabled_val else True
 
-    global_push_enabled_val = await repo.get_secret("global_push_enabled")
-    global_push_enabled = (
-        global_push_enabled_val.lower() == "true" if global_push_enabled_val else True
-    )  # 默认开启
+    # 从数据库读取活跃币种
+    active_symbols_json = await repo.get_secret("active_symbols")
+    active_symbols = json.loads(active_symbols_json) if active_symbols_json else []
+
+    # 从数据库读取监控周期配置
+    monitor_intervals_json = await repo.get_secret("monitor_intervals")
+    monitor_intervals = {}
+    if monitor_intervals_json:
+        try:
+            intervals_data = json.loads(monitor_intervals_json)
+            if isinstance(intervals_data, dict):
+                from core.entities import IntervalConfig
+                monitor_intervals = {
+                    k: IntervalConfig(**v) if isinstance(v, dict) else IntervalConfig()
+                    for k, v in intervals_data.items()
+                }
+        except json.JSONDecodeError:
+            pass
+
+
 
     # 从数据库读取风险配置
     risk_config_json = await repo.get_secret("risk_config")
@@ -629,52 +771,75 @@ async def get_config(request: Request):
         try:
             risk_config_data = json.loads(risk_config_json)
             risk_config = {
-                "risk_pct": risk_config_data.get("risk_pct", engine.risk_pct),
-                "max_sl_dist": risk_config_data.get("max_sl_dist", engine.max_sl_dist),
-                "max_leverage": risk_config_data.get("max_leverage", engine.max_leverage),
+                "risk_pct": risk_config_data.get("risk_pct", engine.risk_config.risk_pct),
+                "max_sl_dist": risk_config_data.get("max_sl_dist", engine.risk_config.max_sl_dist),
+                "max_leverage": risk_config_data.get("max_leverage", engine.risk_config.max_leverage),
             }
         except json.JSONDecodeError:
             risk_config = {
-                "risk_pct": engine.risk_pct,
-                "max_sl_dist": engine.max_sl_dist,
-                "max_leverage": engine.max_leverage,
+                "risk_pct": engine.risk_config.risk_pct,
+                "max_sl_dist": engine.risk_config.max_sl_dist,
+                "max_leverage": engine.risk_config.max_leverage,
             }
     else:
         risk_config = {
-            "risk_pct": engine.risk_pct,
-            "max_sl_dist": engine.max_sl_dist,
-            "max_leverage": engine.max_leverage,
+            "risk_pct": engine.risk_config.risk_pct,
+            "max_sl_dist": engine.risk_config.max_sl_dist,
+            "max_leverage": engine.risk_config.max_leverage,
+        }
+
+    # 从数据库读取评分权重配置
+    scoring_config_json = await repo.get_secret("scoring_config")
+    if scoring_config_json:
+        try:
+            scoring_config_data = json.loads(scoring_config_json)
+            scoring_weights = {
+                "w_shape": scoring_config_data.get("w_shape", 0.4),
+                "w_trend": scoring_config_data.get("w_trend", 0.3),
+                "w_vol": scoring_config_data.get("w_vol", 0.3),
+            }
+        except json.JSONDecodeError:
+            scoring_weights = {
+                "w_shape": engine.weights.w_shape,
+                "w_trend": engine.weights.w_trend,
+                "w_vol": engine.weights.w_vol,
+            }
+    else:
+        scoring_weights = {
+            "w_shape": engine.weights.w_shape,
+            "w_trend": engine.weights.w_trend,
+            "w_vol": engine.weights.w_vol,
         }
 
     import dataclasses
 
+
+    # 从环境变量读取推送配置（不再从数据库读取私密配置）
+    import os
+    global_push_enabled = os.getenv("GLOBAL_PUSH_ENABLED", "true").lower() != "false"
+    feishu_enabled = os.getenv("FEISHU_ENABLED", "false").lower() == "true"
+    wecom_enabled = os.getenv("WECOM_ENABLED", "false").lower() == "true"
+
     return {
-        "system_enabled": engine.system_enabled,
-        "active_symbols": engine.active_symbols,
+        "system_enabled": system_enabled,
+        "active_symbols": active_symbols,
         "monitor_intervals": {
-            k: dataclasses.asdict(v) for k, v in engine.monitor_intervals.items()
+            k: dataclasses.asdict(v) for k, v in monitor_intervals.items()
         }
-        if engine.monitor_intervals
+        if monitor_intervals
         else {},
         "risk_config": risk_config,
-        "scoring_weights": {
-            "w_shape": engine.weights.w_shape,
-            "w_trend": engine.weights.w_trend,
-            "w_vol": engine.weights.w_vol,
-        },
-        "exchange_settings": {"has_binance_key": True},
-        "webhook_settings": {
-            "global_push_enabled": global_push_enabled,
-            "feishu_enabled": True,  # You might want to get this from DB too, but adapting contract for now
-            "wecom_enabled": wecom_enabled,
-            "has_feishu_secret": True,  # Mock logic based on contract
-            "has_wecom_secret": bool(await repo.get_secret("wecom_secret")),
-        },
-        "pinbar_config": dataclasses.asdict(engine.pinbar_config)
-        if engine.pinbar_config
-        else {},
+        "scoring_weights": scoring_weights,
+        "pinbar_config": await get_pinbar_config_from_db(repo, engine.pinbar_config),
         "auto_order_status": "OFF",
+        "push_config": {
+            "global_enabled": global_push_enabled,
+            "feishu_enabled": feishu_enabled,
+            "wecom_enabled": wecom_enabled,
+            # 注意：API Key 和 Webhook URL 不再通过 API 返回
+        },
     }
+
 
 
 @app.put("/api/config")
@@ -725,31 +890,21 @@ async def update_config(request: Request, req: ConfigUpdateReq = Body(...)):
 
     if req.risk_config:
         if req.risk_config.risk_pct is not None:
-            engine.risk_pct = req.risk_config.risk_pct
+            engine.risk_config.risk_pct = req.risk_config.risk_pct
         if req.risk_config.max_sl_dist is not None:
-            engine.max_sl_dist = req.risk_config.max_sl_dist
+            engine.risk_config.max_sl_dist = req.risk_config.max_sl_dist
         if req.risk_config.max_leverage is not None:
-            engine.max_leverage = req.risk_config.max_leverage
+            engine.risk_config.max_leverage = req.risk_config.max_leverage
         await repo.set_secret(
             "risk_config",
             json.dumps({
-                "risk_pct": engine.risk_pct,
-                "max_sl_dist": engine.max_sl_dist,
-                "max_leverage": engine.max_leverage,
+                "risk_pct": engine.risk_config.risk_pct,
+                "max_sl_dist": engine.risk_config.max_sl_dist,
+                "max_leverage": engine.risk_config.max_leverage,
             }),
         )
 
-    if req.exchange_settings:
-        if req.exchange_settings.binance_api_key:
-            engine.account_reader.api_key = req.exchange_settings.binance_api_key
-            await repo.set_secret(
-                "binance_api_key", req.exchange_settings.binance_api_key
-            )
-        if req.exchange_settings.binance_api_secret:
-            engine.account_reader.api_secret = req.exchange_settings.binance_api_secret
-            await repo.set_secret(
-                "binance_api_secret", req.exchange_settings.binance_api_secret
-            )
+    # 注意：exchange_settings 已废弃，API Key 请通过 .env 文件配置
 
     # 安全防线：忽视所有对 auto_order_status 的修改，保持后端处于零执行的只读模式
     if req.auto_order_status is not None:
@@ -757,35 +912,7 @@ async def update_config(request: Request, req: ConfigUpdateReq = Body(...)):
             f"检测到试图修改 auto_order_status 为 {req.auto_order_status}，后端安全锁已拒绝该操作。"
         )
 
-    # 涉及到数据库加密保存的落盘动作
-    if req.webhook_settings:
-        if req.webhook_settings.global_push_enabled is not None:
-            await repo.set_secret(
-                "global_push_enabled",
-                str(req.webhook_settings.global_push_enabled).lower(),
-            )
-
-        if req.webhook_settings.feishu_enabled is not None:
-            await repo.set_secret(
-                "feishu_enabled", str(req.webhook_settings.feishu_enabled).lower()
-            )
-
-        if req.webhook_settings.feishu_secret is not None:
-            # 兼容前端命名，feishu_secret 对应 backend 的 webhook_url
-            await repo.set_secret(
-                "feishu_webhook_url", req.webhook_settings.feishu_secret
-            )
-
-        if req.webhook_settings.wecom_enabled is not None:
-            await repo.set_secret(
-                "wecom_enabled", str(req.webhook_settings.wecom_enabled).lower()
-            )
-
-        if req.webhook_settings.wecom_secret is not None:
-            # 兼容前端命名，wecom_secret 对应 backend 的 webhook_url
-            await repo.set_secret(
-                "wecom_webhook_url", req.webhook_settings.wecom_secret
-            )
+    # 注意：webhook_settings 已废弃，推送配置请通过 .env 文件配置
 
     return {"status": "success", "message": "Configuration hot-reloaded successfully"}
 
@@ -870,6 +997,45 @@ async def get_monitor_config(request: Request):
         raise HTTPException(status_code=500, detail=f"监控配置获取失败：{str(e)}")
 
 
+class MonitorConfigReq(BaseModel):
+    """监控配置更新请求体"""
+    active_symbols: Optional[List[str]] = None
+    monitor_intervals: Optional[Dict[str, Any]] = None
+
+
+@app.put("/api/config/monitor")
+async def update_monitor_config(request: Request, req: MonitorConfigReq):
+    """
+    更新监控配置
+    支持热更新活跃币种列表和监控周期
+    """
+    repo = request.app.state.repo
+    engine = request.app.state.engine
+    config_service = ConfigService(repo)
+
+    update_data = req.model_dump(exclude_unset=True)
+
+    try:
+        # 更新引擎内存中的配置
+        if "active_symbols" in update_data:
+            engine.active_symbols = update_data["active_symbols"]
+        if "monitor_intervals" in update_data:
+            new_intervals = {
+                k: IntervalConfig(use_trend_filter=v.get("use_trend_filter", False))
+                for k, v in update_data["monitor_intervals"].items()
+            }
+            engine.monitor_intervals = new_intervals
+
+        data = await config_service.update_monitor_config(update_data)
+        return _create_response(data, message="监控配置已热更新")
+    except ConfigValidationError as e:
+        logger.warning(f"监控配置校验失败：{e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"监控配置更新失败：{e}")
+        raise HTTPException(status_code=500, detail=f"监控配置更新失败：{str(e)}")
+
+
 @app.get("/api/config/risk")
 async def get_risk_config(request: Request):
     """
@@ -910,11 +1076,11 @@ async def update_risk_config(request: Request, req: RiskConfigReq):
 
     # 更新引擎内存中的配置
     if "risk_pct" in update_data:
-        engine.risk_pct = update_data["risk_pct"]
+        engine.risk_config.risk_pct = update_data["risk_pct"]
     if "max_sl_dist" in update_data:
-        engine.max_sl_dist = update_data["max_sl_dist"]
+        engine.risk_config.max_sl_dist = update_data["max_sl_dist"]
     if "max_leverage" in update_data:
-        engine.max_leverage = update_data["max_leverage"]
+        engine.risk_config.max_leverage = update_data["max_leverage"]
 
     try:
         data = await config_service.update_risk_config(update_data)
@@ -1042,10 +1208,17 @@ async def update_scoring_config_new(request: Request, req: ScoringConfigReq):
     try:
         from domain.strategy.scoring_config import ScoringConfig as ScoringConfigEntity
         engine.scoring_config = ScoringConfigEntity(**new_data)
+        # 同时更新 weights 引擎（策略实际使用的是 engine.weights）
+        engine.weights = ScoringWeights(
+            w_shape=new_data.get("w_shape", 0.4),
+            w_trend=new_data.get("w_trend", 0.3),
+            w_vol=new_data.get("w_vol", 0.3)
+        )
     except ValueError as e:
         # 如果验证失败，回滚并使用默认配置
         logger.error(f"配置验证失败：{e}")
         engine.scoring_config = ScoringConfigEntity()
+        engine.weights = ScoringWeights(w_shape=0.4, w_trend=0.3, w_vol=0.3)
 
     return {
         "status": "success",
@@ -1069,7 +1242,6 @@ async def get_pinbar_config(request: Request):
     返回 Pinbar 形态识别参数
     """
     repo = request.app.state.repo
-    engine = request.app.state.repo
     config_service = ConfigService(repo)
 
     try:
@@ -1121,49 +1293,8 @@ async def update_pinbar_config(request: Request, req: PinbarConfigReq):
         raise HTTPException(status_code=500, detail=f"Pinbar 配置更新失败：{str(e)}")
 
 
-@app.get("/api/config/webhook")
-async def get_webhook_config(request: Request):
-    """
-    获取 Webhook 推送配置
-    返回各推送通道的启用状态和密钥配置
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    try:
-        data = await config_service.get_webhook_config()
-        return _create_response(data)
-    except Exception as e:
-        logger.error(f"Webhook 配置获取失败：{e}")
-        raise HTTPException(status_code=500, detail=f"Webhook 配置获取失败：{str(e)}")
 
 
-class WebhookConfigReq(BaseModel):
-    """Webhook 配置更新请求体"""
-    global_push_enabled: Optional[bool] = None
-    feishu_enabled: Optional[bool] = None
-    feishu_secret: Optional[str] = None
-    wecom_enabled: Optional[bool] = None
-    wecom_secret: Optional[str] = None
-
-
-@app.put("/api/config/webhook")
-async def update_webhook_config(request: Request, req: WebhookConfigReq):
-    """
-    更新 Webhook 配置
-    支持热更新各推送通道的启用状态和密钥
-    """
-    repo = request.app.state.repo
-    config_service = ConfigService(repo)
-
-    update_data = req.model_dump(exclude_unset=True)
-
-    try:
-        data = await config_service.update_webhook_config(update_data)
-        return _create_response(data, message="Webhook 配置已热更新")
-    except Exception as e:
-        logger.error(f"Webhook 配置更新失败：{e}")
-        raise HTTPException(status_code=500, detail=f"Webhook 配置更新失败：{str(e)}")
 
 
 # ==========================================
@@ -1292,3 +1423,152 @@ async def preview_scoring_score(request: Request, req: ScorePreviewRequest = Bod
             }
         }
     }
+
+
+# ==========================================
+# 6. 推送配置管理 (Push Config)
+# ==========================================
+class PushConfigReq(BaseModel):
+    """推送配置更新请求体（已废弃：推送配置请通过 .env 文件设置）"""
+    # 已废弃：所有推送配置请通过 .env 文件设置
+    global_push_enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    feishu_webhook_url: Optional[str] = None
+    wecom_enabled: Optional[bool] = None
+    wecom_webhook_url: Optional[str] = None
+
+
+
+
+
+
+# ==========================================
+# 7. 交易所配置管理 (Exchange Config)
+# ==========================================
+
+@app.post("/api/push/test")
+async def test_push_notification(request: Request, channel: str = "wecom"):
+    """
+    测试推送通知
+    :param channel: 推送通道 (wecom, feishu, all)
+    """
+    # 注意：推送配置已从环境变量读取，不再支持通过 API 测试
+    # 此接口仅用于测试连接性，实际推送请使用配置好的环境变量
+    return {"status": "info", "message": "推送配置已改为从 .env 文件读取，请查看日志确认推送状态"}
+
+
+class ExchangeConfigReq(BaseModel):
+    """交易所配置更新请求体"""
+    binance_api_key: Optional[str] = Field(None, min_length=1)
+    binance_api_secret: Optional[str] = Field(None, min_length=1)
+    use_testnet: Optional[bool] = None
+
+
+
+
+
+
+# ==========================================
+# 8. 配置导入导出 (Config Import/Export)
+# ==========================================
+import os
+import yaml
+from datetime import datetime
+
+from domain.services.config_service import ConfigValidationError
+
+@app.post("/api/config/export")
+async def export_config(request: Request):
+    """
+    导出配置为 YAML 文件
+    敏感字段（binance_api_key、binance_api_secret、feishu_webhook_url、wecom_webhook_url）会被置空
+    """
+    repo = request.app.state.repo
+    config_service = ConfigService(repo)
+
+    try:
+        # 获取所有配置
+        all_config = await config_service.get_all_config_for_export()
+
+        # 生成带时间戳的文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        export_dir = "config"
+        os.makedirs(export_dir, exist_ok=True)
+        file_path = os.path.join(export_dir, f"exported_config_{timestamp}.yaml")
+
+        # 写入 YAML 文件
+        with open(file_path, "w", encoding="utf-8") as f:
+            yaml.dump(all_config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+        logger.info(f"配置已导出：{file_path}")
+
+        return _create_response({
+            "file_path": file_path,
+            "exported_at": timestamp,
+        }, message=f"配置已导出到 {file_path}")
+
+    except Exception as e:
+        logger.error(f"配置导出失败：{e}")
+        raise HTTPException(status_code=500, detail=f"配置导出失败：{str(e)}")
+
+
+@app.post("/api/config/import")
+async def import_config(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    yaml_content: Optional[str] = Form(None)
+):
+    """
+    从 YAML 导入配置
+    支持文件上传或直接传入 yaml_content
+    支持导入所有配置项，包括 binance_api_key、binance_api_secret、feishu_webhook_url、wecom_webhook_url
+    """
+    repo = request.app.state.repo
+    engine = request.app.state.engine
+    config_service = ConfigService(repo)
+
+    content = yaml_content
+
+    # 如果上传了文件，读取文件内容
+    if file:
+        if not file.filename or not (file.filename.endswith(".yaml") or file.filename.endswith(".yml")):
+            raise HTTPException(status_code=400, detail="文件格式错误，请上传 .yaml 或 .yml 文件")
+        try:
+            file_bytes = await file.read()
+            content = file_bytes.decode("utf-8")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"读取文件失败：{str(e)}")
+
+    if not content:
+        raise HTTPException(status_code=400, detail="yaml_content 或 file 必须提供一个")
+
+    try:
+        # 解析 YAML
+        config = yaml.safe_load(content)
+        if not isinstance(config, dict):
+            raise ValueError("YAML 内容必须是字典格式")
+
+        # 校验并导入配置
+        imported_config = await config_service.import_config_from_yaml(config, engine)
+
+        logger.info("配置导入成功")
+
+        return _create_response({
+            "imported_config": imported_config,
+        }, message="配置导入成功")
+
+    except ConfigValidationError as e:
+        logger.warning(f"配置校验失败：{e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except yaml.YAMLError as e:
+        logger.error(f"YAML 解析失败：{e}")
+        raise HTTPException(status_code=400, detail=f"YAML 格式错误：{str(e)}")
+
+    except ValueError as e:
+        logger.error(f"配置验证失败：{e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        logger.error(f"配置导入失败：{e}")
+        raise HTTPException(status_code=500, detail=f"配置导入失败：{str(e)}")

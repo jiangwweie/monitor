@@ -14,7 +14,8 @@ from datetime import datetime, timedelta, timezone
 from core.interfaces import IDataFeed, IAccountReader, IRepository, INotifier
 from domain.strategy.pinbar import PinbarStrategy
 from domain.risk.sizer import PositionSizer
-from core.entities import Bar, ScoringWeights
+from domain.risk.portfolio_risk import PortfolioRiskService
+from core.entities import Bar, ScoringWeights, RiskConfig
 from domain.strategy.scoring_config import ScoringConfig
 from core.exceptions import RiskLimitExceeded
 
@@ -44,6 +45,8 @@ class CryptoRadarEngine:
         self.notifier = notifier
         self.strategy = strategy
         self.risk_sizer = risk_sizer
+        self.portfolio_risk_service = PortfolioRiskService()
+        self.max_portfolio_risk_pct = 0.08  # 投资组合总风险上限 8%
 
         self.active_symbols = active_symbols or []
         self.monitor_intervals = {
@@ -61,9 +64,12 @@ class CryptoRadarEngine:
         self.latest_prices: Dict[str, float] = {}
 
         # 全局风控参数，后续应由 IConfigProvider 动态拉取，此处为快速启动赋默认值
-        self.risk_pct = 0.02
-        self.max_sl_dist = 0.035
-        self.max_leverage = 20.0
+        self.risk_config = RiskConfig(
+            risk_pct=0.02,
+            max_sl_dist=0.035,
+            max_leverage=20.0,
+            max_positions=4
+        )
         self.weights = ScoringWeights(w_shape=0.4, w_trend=0.4, w_vol=0.2)
         from core.entities import PinbarConfig
 
@@ -222,7 +228,7 @@ class CryptoRadarEngine:
                         signal = self.strategy.evaluate(
                             current_bar=current_bar,
                             history_bars=current_history,
-                            max_sl_dist=self.max_sl_dist,
+                            max_sl_dist=self.risk_config.max_sl_dist,
                             weights=self.weights,
                             higher_trend=higher_trend,
                             pinbar_config=self.pinbar_config,
@@ -256,13 +262,28 @@ class CryptoRadarEngine:
                         logger.error(f"无法读取币安余额信息：{e}")
                         continue
 
-                    # 3. 风控算仓大脑计算 (纯领域计算)
+                    # 3. 检查投资组合总风险敞口
+                    portfolio_risk_metrics = self.portfolio_risk_service.calculate_portfolio_risk(
+                        positions=account_balance.positions,
+                        total_wallet_balance=account_balance.total_wallet_balance
+                    )
+
+                    if not self.portfolio_risk_service.check_portfolio_limit(
+                        portfolio_risk_metrics,
+                        self.max_portfolio_risk_pct
+                    ):
+                        logger.warning(
+                            f"🚫 投资组合总风险超限：{portfolio_risk_metrics.total_risk_pct:.2%} "
+                            f"(上限：{self.max_portfolio_risk_pct:.2%})"
+                        )
+                        continue
+
+                    # 4. 风控算仓大脑计算 (纯领域计算)
                     try:
                         sizing = self.risk_sizer.calculate(
                             signal=signal,
                             account=account_balance,
-                            risk_pct=self.risk_pct,
-                            max_leverage=self.max_leverage,
+                            risk_config=self.risk_config,
                         )
                     except RiskLimitExceeded as e:
                         logger.warning(f"🚫 信号由于硬风控被拦截丢弃：{str(e)}")
@@ -330,38 +351,27 @@ class CryptoRadarEngine:
         # 这里为了简化不另开 task，可放在循环空闲期，不过当前是阻塞流，由其他机制衰减亦可。
 
     def _format_message(self, sizing, account, signal=None) -> str:
-        """组装 Markdown 通知，参考 docs/push.md 模板"""
+        """组装 Markdown 通知 - 精简版，只保留关键信息"""
         if signal is None:
             signal = sizing.signal
         timestamp_str = datetime.fromtimestamp(signal.timestamp / 1000).strftime(
             "%Y-%m-%d %H:%M:%S"
         )
 
-        # 提取或推导过滤指标状态
-        direction_emoji = "🟢 LONG" if signal.direction == "LONG" else "🔴 SHORT"
-        ema_status = "Price > EMA60" if signal.direction == "LONG" else "Price < EMA60"
+        direction_emoji = "🟢 多" if signal.direction == "LONG" else "🔴 空"
 
-        # 将打分 (0-100) 映射到模板要求的 (0-10)
+        # 将打分 (0-100) 映射到 (0-10)
         display_score = round(signal.score / 10, 1)
 
         # 信号等级标记
         quality_tier = getattr(signal, 'quality_tier', 'B')
-        tier_badge = "🌟 精品" if quality_tier == 'A' else "📊 普通" if quality_tier == 'B' else "📝 观察"
+        tier_icon = "🌟" if quality_tier == 'A' else "📊" if quality_tier == 'B' else "📝"
 
         return (
-            f"**🚨 发现新交易信号 ({signal.reason})** [{tier_badge}]\n"
-            f"**交易对**: #{signal.symbol.upper()}\n"
-            f"**级别**: {signal.interval} | **方向**: {direction_emoji}\n"
-            f"**时间**: {timestamp_str}\n\n"
-            f"- 预计入场：`{signal.entry_price}`\n"
-            f"- 初始止损：`{signal.stop_loss}`\n"
-            f"- 预期 TP1: `{signal.take_profit_1}` (1.5R)\n\n"
-            f"- EMA60 状态：{ema_status}\n"
-            f"- ADX 强度：`Active`\n"
-            f"- 形态评分：`{display_score}/10`\n"
-            f"- 影线占比：`{signal.shadow_ratio}` 倍\n"
-            f"- EMA 距离：`{signal.ema_distance}%`\n"
-            f"- ATR 波动率：`{signal.volatility_atr}`\n"
-            f"- 信号等级：`{quality_tier}级`\n\n"
-            f"- 只读风控 (建议杠杆 {sizing.suggested_leverage:.1f}x)\n"
+            f"**{tier_icon} {signal.reason} · {display_score}分**\n"
+            f"#{signal.symbol.upper()} | {signal.interval} | {direction_emoji}\n"
+            f"入场：`{signal.entry_price}`\n"
+            f"止损：`{signal.stop_loss}`\n"
+            f"目标：`{signal.take_profit_1}`\n"
+            f"杠杆：`{sizing.suggested_leverage:.1f}x`"
         )

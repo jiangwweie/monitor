@@ -22,7 +22,7 @@ class NotificationBroadcaster(INotifier):
     def register(self, notifier: INotifier) -> "NotificationBroadcaster":
         """
         动态注册一个实现了 INotifier 的具体适配器实例
-        支持链式调用，如 broadcaster.register(feishu).register(telegram)
+        支持链式调用，如 broadcaster.register(feishu).register(wecom)
         """
         if notifier not in self._channels:
             self._channels.append(notifier)

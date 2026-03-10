@@ -1,25 +1,33 @@
-# Frontend Dockerfile for CryptoRadar
+# ==========================================
+# CryptoRadar 前端 Dockerfile
+# ==========================================
+
+# 第一阶段：构建
 FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install dependencies
+# 复制依赖文件
 COPY web_ui/package*.json ./
+
+# 安装依赖
 RUN npm install
 
-# Copy source and build
+# 复制源代码并构建
 COPY web_ui/ .
 RUN npm run build
 
-# Stage 2: Serve with Nginx
+# 第二阶段：Nginx 服务
 FROM nginx:alpine
 
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# 复制自定义 nginx 配置
+COPY config/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy build files from stage 1
+# 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# 暴露 80 端口
 EXPOSE 80
 
+# 启动 Nginx
 CMD ["nginx", "-g", "daemon off;"]

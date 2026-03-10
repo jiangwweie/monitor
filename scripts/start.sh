@@ -64,6 +64,18 @@ echo -e "${YELLOW}步骤 2: 在后台启动后端 Python 引擎...${NC}"
 
 cd "$PROJECT_ROOT"
 
+# 从 .env 文件读取后端端口（如果存在）
+BACKEND_PORT_OPT=8000
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    CUSTOM_PORT=$(grep "^BACKEND_PORT=" "$PROJECT_ROOT/.env" | cut -d'=' -f2)
+    if [ -n "$CUSTOM_PORT" ]; then
+        BACKEND_PORT_OPT=$CUSTOM_PORT
+    fi
+fi
+
+# 导出环境变量供 main.py 使用
+export BACKEND_PORT=$BACKEND_PORT_OPT
+
 if [ -d "venv" ]; then
     nohup venv/bin/python main.py > "$BACKEND_LOG" 2>&1 &
     BACKEND_PID=$!
@@ -92,7 +104,16 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-nohup npm run dev -- --port 5173 > "$FRONTEND_LOG" 2>&1 &
+# 从 .env 文件读取前端端口（如果存在）
+FRONTEND_PORT=5173
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    CUSTOM_PORT=$(grep "^FRONTEND_PORT=" "$PROJECT_ROOT/.env" | cut -d'=' -f2)
+    if [ -n "$CUSTOM_PORT" ]; then
+        FRONTEND_PORT=$CUSTOM_PORT
+    fi
+fi
+
+nohup npm run dev -- --port $FRONTEND_PORT > "$FRONTEND_LOG" 2>&1 &
 FRONTEND_PID=$!
 
 # 保存 PID
@@ -105,6 +126,8 @@ echo -e "${GREEN}  前端已启动 (PID: $FRONTEND_PID), 日志：$FRONTEND_LOG$
 sleep 1
 echo -e "${BLUE}=================================================${NC}"
 echo -e "${GREEN}🚀 系统启动成功！${NC}"
-echo -e "${BLUE}  前端地址：http://localhost:5173${NC}"
-echo -e "${BLUE}  后端 API: http://localhost:8000${NC}"
+echo -e "${BLUE}  前端地址：http://localhost:${FRONTEND_PORT}${NC}"
+echo -e "${BLUE}  后端 API: http://localhost:${BACKEND_PORT:-8000}${NC}"
 echo -e "${BLUE}=================================================${NC}"
+echo -e "${YELLOW}提示：请确保项目根目录的 .env 文件已配置币安 API 密钥${NC}"
+echo -e "${YELLOW}      首次运行请执行：cp .env.example .env${NC}"

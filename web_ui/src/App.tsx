@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Activity, Radar, Wallet, Settings2, Clock, Radar as RadarIcon, Sliders } from "lucide-react";
+import { Activity, Radar, Wallet, Settings2, Clock, Radar as RadarIcon } from "lucide-react";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -11,13 +11,11 @@ import { SignalRadar } from "@/components/SignalRadar";
 import { Positions } from "@/components/Positions";
 import { Settings } from "@/components/Settings";
 import { PositionDetailModal } from "@/components/PositionDetailModal";
-import { ScoringConfigPanel } from "@/components/scoring";
-import { usePolling } from "@/hooks/usePolling";
 
 const AVAILABLE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
 
-// API 基础 URL
-const API_BASE = "http://localhost:8000";
+// API 基础 URL - 从环境变量读取，默认 localhost:8000
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -35,14 +33,12 @@ export default function App() {
     is_contrarian: false,
   });
 
-  const [selectedPositionDetail, setSelectedPositionDetail] = useState<any>(null);
+  const [selectedPositionDetail, setSelectedPositionDetail] = useState<unknown>(null);
   const [loadingPositionDetail, setLoadingPositionDetail] = useState(false);
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
 
-  // 配置数据 - 仅初始加载
+  // 配置数据 - 仅初始加载（非私密配置）
   const [config, setConfig] = useState({
-    system_enabled: false,
-    global_push_enabled: true,
     symbols: "BTCUSDT,ETHUSDT",
     monitor_intervals: ["15m", "1h", "4h", "1d"],
     risk_pct: 2.0,
@@ -51,15 +47,6 @@ export default function App() {
     w_shape: 50,
     w_trend: 30,
     w_vol: 20,
-    feishu_enabled: false,
-    feishu_secret: "",
-    wecom_enabled: false,
-    wecom_secret: "",
-    has_secret: false,
-    has_wecom_secret: false,
-    binance_api_key: "",
-    binance_api_secret: "",
-    has_binance_key: false,
     body_max_ratio: 0.25,
     shadow_min_ratio: 2.5,
     volatility_atr_multiplier: 1.2,
@@ -71,22 +58,7 @@ export default function App() {
     dynamic_sl_atr_multiplier: 0.5,
   });
 
-  // 系统状态轮询 - 30 秒间隔
-  const {
-    data: systemStatusData,
-  } = usePolling(
-    async () => {
-      const res = await fetch(`${API_BASE}/api/system/status`);
-      if (!res.ok) throw new Error("System status fetch failed");
-      return await res.json();
-    },
-    {
-      interval: 30000,
-      enabled: true,
-      immediate: true,
-    }
-  );
-
+  // 系统状态轮询 - 30 秒间隔（保留用于健康监控）
   const [systemStatus, setSystemStatus] = useState({
     is_connected: false,
     api_latency_ms: 0,
@@ -94,78 +66,56 @@ export default function App() {
     uptime: "0s",
   });
 
-  // 账户余额轮询 - 60 秒间隔
-  const {
-    data: dashboardData,
-  } = usePolling(
-    async () => {
-      const res = await fetch(`${API_BASE}/api/account/balance`);
-      if (!res.ok) throw new Error("Balance fetch failed");
-      const data = await res.json();
-      return data.status === "success" ? data.data : null;
-    },
-    {
-      interval: 60000,
-      enabled: true,
-      immediate: true,
-    }
-  );
-
-  // 信号列表轮询 - 60 秒间隔
-  const {
-    data: signals,
-  } = usePolling(
-    async () => {
-      const res = await fetch(`${API_BASE}/api/signals`);
-      if (!res.ok) throw new Error("Signals fetch failed");
-      const data = await res.json();
-      return Array.isArray(data?.items) ? data.items : [];
-    },
-    {
-      interval: 60000,
-      enabled: true,
-      immediate: true,
-    }
-  );
+  // 持仓刷新触发器
+  const [positionRefreshTrigger, setPositionRefreshTrigger] = useState(0);
 
   // 实时价格轮询 - 2 秒间隔
-  usePolling(
-    async () => {
+  useEffect(() => {
+    const fetchPrices = async () => {
       const activeSymbols = config.symbols.split(",").map((s) => s.trim()).filter(Boolean);
-      if (activeSymbols.length === 0) return {};
+      if (activeSymbols.length === 0) return;
 
       const symbolQuery = `["${activeSymbols.join('","')}"]`;
-      const res = await fetch(
-        `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbolQuery)}`
-      );
+      try {
+        const res = await fetch(
+          `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbolQuery)}`
+        );
+        if (!res.ok) throw new Error("Price fetch failed");
+        const data = await res.json();
+        const newPrices: Record<string, number> = {};
+        data.forEach((item: { symbol: string; price: string }) => {
+          newPrices[item.symbol] = Number(item.price);
+        });
+        setRealtimePrices((prev) => ({ ...prev, ...newPrices }));
+      } catch {
+        console.error("Price fetch error");
+      }
+    };
 
-      if (!res.ok) throw new Error("Price fetch failed");
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 2000);
+    return () => clearInterval(interval);
+  }, [config.symbols]);
 
-      const data = await res.json();
-      const newPrices: Record<string, number> = {};
-      data.forEach((item: any) => {
-        newPrices[item.symbol] = Number(item.price);
-      });
-      return newPrices;
-    },
-    {
-      interval: 2000,
-      enabled: true,
-      immediate: true,
-      onSuccess: (data) => {
-        if (data) {
-          setRealtimePrices((prev) => ({ ...prev, ...data }));
-        }
-      },
-    }
-  );
-
-  // 同步系统状态到 state
+  // 系统状态轮询 - 30 秒间隔
   useEffect(() => {
-    if (systemStatusData) {
-      setSystemStatus((prev) => ({ ...prev, ...systemStatusData }));
-    }
-  }, [systemStatusData]);
+    const fetchSystemStatus = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/system/status`);
+        if (!res.ok) throw new Error("System status fetch failed");
+        const data = await res.json();
+        if (data?.data) {
+          setSystemStatus((prev) => ({ ...prev, ...data.data }));
+        }
+      } catch {
+        console.error("System status fetch error");
+      }
+    };
+
+    fetchSystemStatus();
+    const interval = setInterval(fetchSystemStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Load preferences
   useEffect(() => {
@@ -180,8 +130,6 @@ export default function App() {
           const data = await configRes.json();
           setConfig((prev) => ({
             ...prev,
-            system_enabled: data.system_enabled ?? false,
-            global_push_enabled: data.global_push_enabled ?? true,
             symbols: Array.isArray(data.active_symbols)
               ? data.active_symbols.join(",")
               : prev.symbols,
@@ -192,11 +140,6 @@ export default function App() {
             w_shape: Math.round(parseFloat(data.scoring_weights?.w_shape || 0) * 100),
             w_trend: Math.round(parseFloat(data.scoring_weights?.w_trend || 0) * 100),
             w_vol: Math.round(parseFloat(data.scoring_weights?.w_vol || 0) * 100),
-            feishu_enabled: data.webhook_settings?.feishu_enabled ?? false,
-            wecom_enabled: data.webhook_settings?.wecom_enabled ?? false,
-            has_secret: data.webhook_settings?.has_secret ?? false,
-            has_wecom_secret: data.webhook_settings?.has_wecom_secret ?? false,
-            has_binance_key: data.exchange_settings?.has_binance_key ?? false,
             body_max_ratio: data.pinbar_config?.body_max_ratio ?? 0.25,
             shadow_min_ratio: data.pinbar_config?.shadow_min_ratio ?? 2.5,
             volatility_atr_multiplier: data.pinbar_config?.volatility_atr_multiplier ?? 1.2,
@@ -221,7 +164,7 @@ export default function App() {
           const local = localStorage.getItem("monitor_table_columns");
           if (local) setTableColumns(JSON.parse(local));
         }
-      } catch (error) {
+      } catch {
         console.warn("Initial config load failed");
       } finally {
         setLoading(false);
@@ -232,126 +175,8 @@ export default function App() {
   }, []);
 
   // 配置变更处理
-  const handleConfigChange = (field: string, value: any) => {
+  const handleConfigChange = (field: string, value: unknown) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSymbolToggle = (sym: string) => {
-    const current = config.symbols
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (current.includes(sym)) {
-      handleConfigChange("symbols", current.filter((s) => s !== sym).join(","));
-    } else {
-      handleConfigChange("symbols", [...current, sym].join(","));
-    }
-  };
-
-  const handleWeightAutoBalance = (field: string, value: number[]) => {
-    const newVal = value[0];
-    setConfig((prev) => {
-      const keys = ["w_shape", "w_trend", "w_vol"] as const;
-      const otherKeys = keys.filter((k) => k !== field);
-      const oldVal = prev[field as keyof typeof prev] as number;
-      const diff = newVal - oldVal;
-      const sumOthers = otherKeys.reduce(
-        (acc, k) => acc + (prev[k as keyof typeof prev] as number),
-        0
-      );
-
-      let nextState = { ...prev, [field]: newVal };
-
-      if (sumOthers === 0) {
-        const remainder = 100 - newVal;
-        nextState[otherKeys[0]] = remainder / 2;
-        nextState[otherKeys[1]] = remainder / 2;
-      } else {
-        otherKeys.forEach((k) => {
-          const current = prev[k as keyof typeof prev] as number;
-          const ratio = current / sumOthers;
-          nextState[k] = Math.max(0, current - diff * ratio);
-        });
-      }
-
-      const intShape = Math.round(nextState.w_shape as number);
-      const intTrend = Math.round(nextState.w_trend as number);
-      const intVol = 100 - intShape - intTrend;
-
-      return {
-        ...nextState,
-        w_shape: intShape,
-        w_trend: intTrend,
-        w_vol: intVol,
-      };
-    });
-  };
-
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const payload = {
-      system_enabled: Boolean(config.system_enabled),
-      global_push_enabled: Boolean(config.global_push_enabled),
-      active_symbols: config.symbols
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      monitor_intervals: config.monitor_intervals,
-      risk_config: {
-        risk_pct: Math.round(Number(config.risk_pct) * 100) / 10000.0,
-        max_sl_dist: Math.round(Number(config.max_sl_dist) * 100) / 10000.0,
-        max_leverage: Number(config.max_leverage),
-      },
-      scoring_weights: {
-        w_shape: Number(config.w_shape) / 100.0,
-        w_trend: Number(config.w_trend) / 100.0,
-        w_vol: Number(config.w_vol) / 100.0,
-      },
-      webhook_settings: {
-        feishu_enabled: Boolean(config.feishu_enabled),
-        ...(config.feishu_secret ? { feishu_secret: config.feishu_secret } : {}),
-        wecom_enabled: Boolean(config.wecom_enabled),
-        ...(config.wecom_secret ? { wecom_secret: config.wecom_secret } : {}),
-      },
-      exchange_settings: {
-        ...(config.binance_api_key ? { binance_api_key: config.binance_api_key } : {}),
-        ...(config.binance_api_secret ? { binance_api_secret: config.binance_api_secret } : {}),
-      },
-      pinbar_config: {
-        body_max_ratio: Number(config.body_max_ratio),
-        shadow_min_ratio: Number(config.shadow_min_ratio),
-        volatility_atr_multiplier: Number(config.volatility_atr_multiplier),
-        doji_threshold: Number(config.doji_threshold || 0.05),
-        doji_shadow_bonus: Number(config.doji_shadow_bonus || 0.6),
-        mtf_trend_filter_mode: config.mtf_trend_filter_mode || "soft",
-        dynamic_sl_enabled: config.dynamic_sl_enabled ?? true,
-        dynamic_sl_base: Number(config.dynamic_sl_base || 0.035),
-        dynamic_sl_atr_multiplier: Number(config.dynamic_sl_atr_multiplier || 0.5),
-      },
-    };
-
-    try {
-      const res = await fetch("http://localhost:8000/api/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        toast.success("配置已更新 (Configuration Saved)", {
-          description: "新的风控与评分权重已生效。",
-          className: "bg-zinc-900 border border-white/10 text-zinc-100",
-        });
-      } else {
-        throw new Error("Save failed");
-      }
-    } catch (error) {
-      toast.error("保存失败 (Save Failed)", {
-        description: "后端服务离线或网络异常。",
-        className: "bg-red-950 border border-red-900",
-      });
-    }
   };
 
   const handleOpenPositionDetail = async (symbol: string) => {
@@ -371,11 +196,16 @@ export default function App() {
       } else {
         toast.error("网络异常或接口报错");
       }
-    } catch (e) {
+    } catch {
       toast.error("请求异常");
     } finally {
       setLoadingPositionDetail(false);
     }
+  };
+
+  // 触发持仓刷新
+  const handlePositionRefresh = () => {
+    setPositionRefreshTrigger((prev) => prev + 1);
   };
 
   if (loading) {
@@ -480,42 +310,33 @@ export default function App() {
                 <Settings2 className="w-4 h-4 mr-2" />
                 系统设置
               </TabsTrigger>
-              <TabsTrigger
-                value="scoring"
-                className="rounded-xl px-6 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:shadow-none transition-all"
-              >
-                <Sliders className="w-4 h-4 mr-2" />
-                打分配置
-              </TabsTrigger>
             </TabsList>
 
-            {/* Dashboard Tab */}
+            {/* Dashboard Tab - 组件自行加载数据 */}
             <TabsContent value="dashboard">
               <Dashboard
                 systemStatus={systemStatus}
-                dashboardData={dashboardData}
                 realtimePrices={realtimePrices}
                 activeSymbols={config.symbols.split(",").map((s) => s.trim()).filter(Boolean)}
                 onOpenPositionDetail={handleOpenPositionDetail}
               />
             </TabsContent>
 
-            {/* Signals Tab */}
+            {/* Signals Tab - 组件自行加载数据 */}
             <TabsContent value="signals">
               <SignalRadar
-                signals={signals || []}
                 availableSymbols={AVAILABLE_SYMBOLS}
                 tableColumns={tableColumns}
                 onTableColumnsChange={setTableColumns}
-                onSignalsChange={() => {}}
               />
             </TabsContent>
 
-            {/* Positions Tab */}
+            {/* Positions Tab - 支持外部刷新触发器 */}
             <TabsContent value="positions">
               <Positions
-                dashboardData={dashboardData}
+                refreshTrigger={positionRefreshTrigger}
                 onOpenPositionDetail={handleOpenPositionDetail}
+                onRefresh={handlePositionRefresh}
               />
             </TabsContent>
 
@@ -524,15 +345,7 @@ export default function App() {
               <Settings
                 config={config}
                 onConfigChange={handleConfigChange}
-                onSymbolToggle={handleSymbolToggle}
-                onWeightAutoBalance={handleWeightAutoBalance}
-                onSave={handleSaveConfig}
               />
-            </TabsContent>
-
-            {/* Scoring Config Tab */}
-            <TabsContent value="scoring">
-              <ScoringConfigPanel />
             </TabsContent>
           </Tabs>
         </main>

@@ -4,6 +4,7 @@
 严格遵守无第三方依赖原则。
 """
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Dict, Optional, List
 from enum import Enum
 
@@ -20,12 +21,12 @@ class PinbarConfig:
     dynamic_sl_base: float = 0.035         # 动态止损基准值 (3.5%)
     dynamic_sl_atr_multiplier: float = 0.5 # ATR 对止损的贡献系数
     atr_volatility_lookback: int = 20      # ATR 波动率回溯周期
-    shape_divergence_penalty: int = 20     # 形态-趋势背离扣分 (形态方向与EMA趋势方向相反时)
+    shape_divergence_penalty: int = 20     # 形态 - 趋势背离扣分 (形态方向与 EMA 趋势方向相反时)
 
 @dataclass
 class Bar:
-    """K线实体
-    系统内所有涉及K线数据的标准载体。
+    """K 线实体
+    系统内所有涉及 K 线数据的标准载体。
     """
     symbol: str
     interval: str    # 时间级别 (如 "15m", "1h")
@@ -35,7 +36,21 @@ class Bar:
     low: float
     close: float
     volume: float
-    is_closed: bool  # 仅处理 is_closed=True 的K线
+    is_closed: bool  # 仅处理 is_closed=True 的 K 线
+
+@dataclass
+class Position:
+    """持仓实体
+    强类型持仓数据载体，替代 List[Dict[str, float]]
+    """
+    symbol: str
+    quantity: float             # 持仓数量（绝对值）
+    entry_price: float          # 入场均价
+    leverage: float             # 杠杆倍数
+    unrealized_pnl: float = 0.0 # 未实现盈亏
+    position_value: float = 0.0 # 仓位价值（可由 quantity * entry_price 计算）
+    risk_amount: float = 0.0    # 该持仓的风险额（开仓时由 PositionSizer 计算）
+    direction: str = "LONG"     # 持仓方向："LONG" 或 "SHORT"
 
 @dataclass
 class AccountBalance:
@@ -45,10 +60,10 @@ class AccountBalance:
     total_wallet_balance: float
     available_balance: float
     current_positions_count: int  # 现有的持仓笔数（n）
-    total_balance: float = 0.0 # 账户总资金
+    total_balance: float = 0.0    # 账户总资金
     available_margin: float = 0.0 # 可用保证金
     total_unrealized_pnl: float = 0.0 # 总计未实现盈亏
-    positions: List[Dict[str, float]] = field(default_factory=list) # 持仓列表, 包括 unrealized_pnl
+    positions: List[Position] = field(default_factory=list) # 持仓列表
 
 @dataclass
 class PositionDetail:
@@ -104,31 +119,35 @@ class Signal:
     shadow_ratio: float = 0.0 # 影线占比
     ema_distance: float = 0.0 # EMA 距离
     volatility_atr: float = 0.0 # ATR 波动率
-    source: str = "realtime"   # 信号来源: "realtime" (实时监控) | "history_scan" (历史回扫)
+    source: str = "realtime"   # 信号来源："realtime" (实时监控) | "history_scan" (历史回扫)
     is_contrarian: bool = False # 是否为逆势信号 (MTF soft 模式下)
     is_shape_divergent: bool = False # 是否为形态与趋势背离信号
     quality_tier: str = "B"  # 信号质量分级："A" (精品) | "B" (普通) | "C" (观察)
+    id: Optional[int] = None  # 数据库 ID（可选，仅查询时使用）
 
 @dataclass
 class PositionSizing:
     """风控算仓建议实体
     基于风控参数和账户真实余额推算的只读建议。
-    这里仅仅是“建议”而非“指令”，严格遵循 Zero Execution 约束。
+    这里仅仅是"建议"而非"指令"，严格遵循 Zero Execution 约束。
     """
     signal: Signal
     suggested_leverage: float  # 建议杠杆，受限于 max_leverage
     suggested_quantity: float  # 建议开仓数量
     investment_amount: float   # 最后分配的本金
     risk_amount: float         # 承担的固定风险额
+    actual_risk_amount: float = 0.0  # 实际风险额（杠杆熔断后可能降低）
+    leverage_capped: bool = False    # 是否触发杠杆熔断
 
 @dataclass
 class RiskConfig:
     """风控配置实体
     处理 K 线前进行热加载的风控参数。
     """
-    risk_pct: float      # 单笔最大风险百分比，例如 0.02 (2%)
-    max_sl_dist: float   # 天地针熔断最大止损距离，例如 0.035 (3.5%)
-    max_leverage: float  # 杠杆熔断上限，例如 20.0
+    risk_pct: float           # 单笔最大风险百分比，例如 0.02 (2%)
+    max_sl_dist: float        # 天地针熔断最大止损距离，例如 0.035 (3.5%)
+    max_leverage: float       # 杠杆熔断上限，例如 20.0
+    max_positions: int = 4    # 最大持仓数量上限，默认 4 笔
 
 class AutoOrderStatus(str, Enum):
     """自动下单开关枚举 (严禁编辑且必须置灰显示)"""
@@ -153,7 +172,7 @@ class WebhookSettings:
 class SystemConfig:
     """系统全局配置实体"""
     active_symbols: List[str]
-    monitor_intervals: Dict[str, IntervalConfig]  # 监控周期及其各自配置, 如 {"15m": IntervalConfig(use_trend_filter=True)}
+    monitor_intervals: Dict[str, IntervalConfig]  # 监控周期及其各自配置，如 {"15m": IntervalConfig(use_trend_filter=True)}
     risk_config: RiskConfig
     scoring_weights: ScoringWeights
     webhook_settings: WebhookSettings
@@ -181,5 +200,5 @@ class SignalFilter:
     start_time: Optional[int] = None
     end_time: Optional[int] = None
     min_score: Optional[int] = None           # 最低分数线
-    sort_by: Optional[str] = "timestamp"      # 排序字段: "timestamp" or "score"
-    order: Optional[str] = "desc"             # 排序方向: "asc" or "desc"
+    sort_by: Optional[str] = "timestamp"      # 排序字段："timestamp" or "score"
+    order: Optional[str] = "desc"             # 排序方向："asc" or "desc"

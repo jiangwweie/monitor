@@ -9,5 +9,8 @@ class RiskLimitExceeded(Exception):
     当交易信号或账户状态超过安全风控阈值（如持仓已达上限、止损距离过大等）时抛出。
     此异常通常用于拦截发单流程，保护账户安全。
     """
-    def __init__(self, message: str):
+    def __init__(self, message: str, error_code: str = "RISK_LIMIT_EXCEEDED", context: dict = None):
         super().__init__(message)
+        self.message = message
+        self.error_code = error_code
+        self.context = context or {}

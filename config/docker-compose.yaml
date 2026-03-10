@@ -1,24 +1,77 @@
+# ==========================================
+# CryptoRadar Docker Compose 配置文件
+# ==========================================
+# 使用方法：
+# 1. 确保宿主机目录存在：
+#    mkdir -p /Users/jiangwei/Documents/docker/monitor/{data,logs,config}
+# 2. 复制 .env.example 为 .env 并配置：
+#    cp .env.example .env
+# 3. 启动服务：
+#    docker-compose up --build -d
+# 4. 查看日志：
+#    docker-compose logs -f
+# 5. 停止服务：
+#    docker-compose down
+# ==========================================
+
 services:
+  # ------------------------------------------
+  # 后端服务 - FastAPI + Uvicorn
+  # ------------------------------------------
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ..
+      dockerfile: config/Dockerfile.backend
+    container_name: cryptoradar-backend
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:${BACKEND_PORT:-8000}"
     volumes:
-      - /Users/jiangwei/Documents/docker/monitor/radar.db:/app/radar.db
+      # 数据持久化
+      - /Users/jiangwei/Documents/docker/monitor/data:/app/data
+      # .env 配置文件挂载
       - /Users/jiangwei/Documents/docker/monitor/.env:/app/.env
+      # 日志目录挂载
       - /Users/jiangwei/Documents/docker/monitor/logs:/app/logs
     environment:
       - TZ=Asia/Shanghai
+      # 传递端口配置给 main.py
+      - BACKEND_PORT=${BACKEND_PORT:-8000}
+      # 数据库和日志路径
+      - DB_DIR=/app/data
+      - LOG_DIR=/app/logs
+    env_file:
+      - /Users/jiangwei/Documents/docker/monitor/.env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
+    networks:
+      - cryptoradar-network
 
+  # ------------------------------------------
+  # 前端服务 - Nginx
+  # ------------------------------------------
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ..
+      dockerfile: config/Dockerfile.frontend
+    container_name: cryptoradar-frontend
     ports:
-      - "5173:80"
+      - "${FRONTEND_PORT:-5174}:80"
     depends_on:
       - backend
+    environment:
+      - TZ=Asia/Shanghai
     restart: unless-stopped
+    networks:
+      - cryptoradar-network
+
+# ------------------------------------------
+# 网络配置
+# ------------------------------------------
+networks:
+  cryptoradar-network:
+    driver: bridge

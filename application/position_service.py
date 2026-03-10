@@ -2,8 +2,9 @@
 应用层：持仓查询服务
 职责：编排账户读取器和仓储，提供持仓相关用例
 """
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from core.interfaces import IAccountReader, IRepository
+from core.entities import AccountBalance
 
 
 class PositionService:
@@ -12,6 +13,15 @@ class PositionService:
     def __init__(self, account_reader: IAccountReader, repo: IRepository):
         self.account_reader = account_reader
         self.repo = repo
+
+    async def get_full_account_data(self) -> Optional[AccountBalance]:
+        """
+        获取完整账户数据（一次 API 调用）
+        返回原始的 AccountBalance 对象，包含所有字段
+
+        :return: AccountBalance 对象或 None（如果失败）
+        """
+        return await self.account_reader.fetch_account_balance()
 
     async def refresh_positions(self) -> List[Dict[str, Any]]:
         """

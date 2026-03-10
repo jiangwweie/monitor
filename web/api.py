@@ -138,23 +138,38 @@ async def get_account_dashboard(request: Request):
     """
     账户仪表盘数据
     返回新字段结构：wallet_balance, total_unrealized_pnl, margin_balance
+
+    优化：只调用 1 次 Binance API，复用账户数据，避免重复请求
     """
     # 获取持仓服务（从 app.state 获取）
     service: PositionService = request.app.state.position_service
 
     try:
-        # 获取数据
-        wallet_balance = await service.get_wallet_balance()
-        unrealized_pnl = await service.get_unrealized_pnl()
-        margin_balance = await service.get_margin_balance(wallet_balance, unrealized_pnl)
-        positions = await service.refresh_positions()
+        # 只调用 1 次 API，获取完整账户数据
+        account = await service.account_reader.fetch_account_balance()
+
+        wallet_balance = account.total_wallet_balance
+        unrealized_pnl = account.total_unrealized_pnl
+        margin_balance = wallet_balance + unrealized_pnl
+
+        # 复用 positions，不再重复调用 API
+        positions_data = [
+            {
+                "symbol": p.symbol,
+                "positionAmt": p.quantity * (1 if p.direction == "LONG" else -1),
+                "entryPrice": p.entry_price,
+                "unrealized_pnl": p.unrealized_pnl,
+                "leverage": p.leverage,
+            }
+            for p in (account.positions or [])
+        ]
 
         return _create_response({
             "wallet_balance": wallet_balance,
             "total_unrealized_pnl": unrealized_pnl,
             "margin_balance": margin_balance,
-            "current_positions_count": len(positions),
-            "positions": positions,
+            "current_positions_count": len(positions_data),
+            "positions": positions_data,
         })
     except httpx.HTTPStatusError as e:
         _handle_binance_error(e, context="fetch account data")
@@ -167,13 +182,30 @@ async def refresh_positions(request: Request):
     """
     实时刷新持仓
     从币安 API 获取最新持仓数据
+
+    优化：一次 API 调用获取完整账户数据，避免重复请求
     """
     # 获取持仓服务（从 app.state 获取）
     service: PositionService = request.app.state.position_service
 
     try:
-        positions = await service.refresh_positions()
-        return _create_response({"positions": positions})
+        # 一次 API 调用获取完整账户数据
+        account = await service.get_full_account_data()
+        positions = account.positions if account.positions else []
+
+        # 转换为前端格式
+        positions_data = [
+            {
+                "symbol": p.symbol,
+                "positionAmt": p.quantity * (1 if p.direction == "LONG" else -1),
+                "entryPrice": p.entry_price,
+                "unrealized_pnl": p.unrealized_pnl,
+                "leverage": p.leverage,
+            }
+            for p in positions
+        ]
+
+        return _create_response({"positions": positions_data})
     except httpx.HTTPStatusError as e:
         _handle_binance_error(e, context="fetch positions")
     except Exception as e:
@@ -184,13 +216,17 @@ async def refresh_positions(request: Request):
 async def get_wallet_balance(request: Request):
     """
     获取钱包余额（初始保证金）
+
+    优化：一次 API 调用获取完整账户数据，避免重复请求
     """
     # 获取持仓服务（从 app.state 获取）
     service: PositionService = request.app.state.position_service
 
     try:
-        balance = await service.get_wallet_balance()
-        return _create_response({"wallet_balance": balance})
+        # 一次 API 调用获取完整账户数据
+        account = await service.get_full_account_data()
+        wallet_balance = account.total_wallet_balance if account else 0.0
+        return _create_response({"wallet_balance": wallet_balance})
     except httpx.HTTPStatusError as e:
         _handle_binance_error(e, context="fetch wallet balance")
     except Exception as e:

@@ -15,7 +15,7 @@ import json
 import logging
 import dataclasses
 
-from core.entities import SignalFilter, ScoringWeights, PinbarConfig, IntervalConfig
+from core.entities import SignalFilter, ScoringWeights, PinbarConfig, IntervalConfig, Position
 from domain.strategy.scoring_config import ScoringConfig
 from domain.strategy.scoring_factory import ScoringStrategyFactory
 from infrastructure.reader.binance_api import BinanceAccountReader
@@ -24,6 +24,21 @@ from application.signal_query_service import SignalQueryService
 from application.position_service import PositionService
 
 logger = logging.getLogger(__name__)
+
+
+def _position_to_dict(pos: Position) -> Dict[str, Any]:
+    """将 Position 实体转换为前端友好的驼峰命名字典"""
+    # 根据方向计算带符号的 positionAmt
+    position_amt = pos.quantity if pos.direction == "LONG" else -pos.quantity
+    return {
+        "symbol": pos.symbol,
+        "positionAmt": position_amt,
+        "entryPrice": pos.entry_price,
+        "unrealized_pnl": pos.unrealized_pnl,
+        "leverage": pos.leverage,
+        "positionValue": pos.position_value,
+        "riskAmount": pos.risk_amount
+    }
 
 
 def _handle_binance_error(e: httpx.HTTPStatusError, context: str = "API") -> None:
@@ -173,7 +188,9 @@ async def refresh_positions(request: Request):
 
     try:
         positions = await service.refresh_positions()
-        return _create_response({"positions": positions})
+        # 将 Position 实体转换为前端友好的驼峰命名字典
+        positions_data = [_position_to_dict(pos) for pos in positions]
+        return _create_response({"positions": positions_data})
     except httpx.HTTPStatusError as e:
         _handle_binance_error(e, context="fetch positions")
     except Exception as e:
@@ -670,6 +687,7 @@ class RiskConfig(BaseModel):
     risk_pct: Optional[float] = Field(None, ge=0.005, le=0.1)
     max_sl_dist: Optional[float] = Field(None, ge=0.01, le=0.1)
     max_leverage: Optional[float] = Field(None, ge=1.0, le=125.0)
+    max_positions: Optional[int] = Field(None, ge=1, le=10)
 
 
 class ConfigUpdateReq(BaseModel):
@@ -735,21 +753,24 @@ async def get_config(request: Request):
         try:
             risk_config_data = json.loads(risk_config_json)
             risk_config = {
-                "risk_pct": risk_config_data.get("risk_pct", engine.risk_pct),
-                "max_sl_dist": risk_config_data.get("max_sl_dist", engine.max_sl_dist),
-                "max_leverage": risk_config_data.get("max_leverage", engine.max_leverage),
+                "risk_pct": risk_config_data.get("risk_pct", engine.risk_config.risk_pct),
+                "max_sl_dist": risk_config_data.get("max_sl_dist", engine.risk_config.max_sl_dist),
+                "max_leverage": risk_config_data.get("max_leverage", engine.risk_config.max_leverage),
+                "max_positions": risk_config_data.get("max_positions", engine.risk_config.max_positions),
             }
         except json.JSONDecodeError:
             risk_config = {
-                "risk_pct": engine.risk_pct,
-                "max_sl_dist": engine.max_sl_dist,
-                "max_leverage": engine.max_leverage,
+                "risk_pct": engine.risk_config.risk_pct,
+                "max_sl_dist": engine.risk_config.max_sl_dist,
+                "max_leverage": engine.risk_config.max_leverage,
+                "max_positions": engine.risk_config.max_positions,
             }
     else:
         risk_config = {
-            "risk_pct": engine.risk_pct,
-            "max_sl_dist": engine.max_sl_dist,
-            "max_leverage": engine.max_leverage,
+            "risk_pct": engine.risk_config.risk_pct,
+            "max_sl_dist": engine.risk_config.max_sl_dist,
+            "max_leverage": engine.risk_config.max_leverage,
+            "max_positions": engine.risk_config.max_positions,
         }
 
     # 从数据库读取评分权重配置
@@ -854,17 +875,20 @@ async def update_config(request: Request, req: ConfigUpdateReq = Body(...)):
 
     if req.risk_config:
         if req.risk_config.risk_pct is not None:
-            engine.risk_pct = req.risk_config.risk_pct
+            engine.risk_config.risk_pct = req.risk_config.risk_pct
         if req.risk_config.max_sl_dist is not None:
-            engine.max_sl_dist = req.risk_config.max_sl_dist
+            engine.risk_config.max_sl_dist = req.risk_config.max_sl_dist
         if req.risk_config.max_leverage is not None:
-            engine.max_leverage = req.risk_config.max_leverage
+            engine.risk_config.max_leverage = req.risk_config.max_leverage
+        if req.risk_config.max_positions is not None:
+            engine.risk_config.max_positions = req.risk_config.max_positions
         await repo.set_secret(
             "risk_config",
             json.dumps({
-                "risk_pct": engine.risk_pct,
-                "max_sl_dist": engine.max_sl_dist,
-                "max_leverage": engine.max_leverage,
+                "risk_pct": engine.risk_config.risk_pct,
+                "max_sl_dist": engine.risk_config.max_sl_dist,
+                "max_leverage": engine.risk_config.max_leverage,
+                "max_positions": engine.risk_config.max_positions,
             }),
         )
 
@@ -1024,6 +1048,7 @@ class RiskConfigReq(BaseModel):
     risk_pct: Optional[float] = Field(None, ge=0.005, le=0.1)
     max_sl_dist: Optional[float] = Field(None, ge=0.01, le=0.1)
     max_leverage: Optional[float] = Field(None, ge=1.0, le=125.0)
+    max_positions: Optional[int] = Field(None, ge=1, le=10)
 
 
 @app.put("/api/config/risk")
@@ -1040,11 +1065,13 @@ async def update_risk_config(request: Request, req: RiskConfigReq):
 
     # 更新引擎内存中的配置
     if "risk_pct" in update_data:
-        engine.risk_pct = update_data["risk_pct"]
+        engine.risk_config.risk_pct = update_data["risk_pct"]
     if "max_sl_dist" in update_data:
-        engine.max_sl_dist = update_data["max_sl_dist"]
+        engine.risk_config.max_sl_dist = update_data["max_sl_dist"]
     if "max_leverage" in update_data:
-        engine.max_leverage = update_data["max_leverage"]
+        engine.risk_config.max_leverage = update_data["max_leverage"]
+    if "max_positions" in update_data:
+        engine.risk_config.max_positions = update_data["max_positions"]
 
     try:
         data = await config_service.update_risk_config(update_data)

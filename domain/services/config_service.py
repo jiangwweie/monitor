@@ -733,11 +733,13 @@ class ConfigService:
                     }
             if risk_config:
                 if "risk_pct" in risk_config:
-                    engine.risk_pct = risk_config["risk_pct"]
+                    engine.risk_config.risk_pct = risk_config["risk_pct"]
                 if "max_sl_dist" in risk_config:
-                    engine.max_sl_dist = risk_config["max_sl_dist"]
+                    engine.risk_config.max_sl_dist = risk_config["max_sl_dist"]
                 if "max_leverage" in risk_config:
-                    engine.max_leverage = risk_config["max_leverage"]
+                    engine.risk_config.max_leverage = risk_config["max_leverage"]
+                if "max_positions" in risk_config:
+                    engine.risk_config.max_positions = risk_config["max_positions"]
             if pinbar_config:
                 engine.pinbar_config = PinbarConfig(**pinbar_config)
             # 处理打分配置更新引擎

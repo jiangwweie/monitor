@@ -59,82 +59,193 @@
 
 ### 方式一：Docker 部署（推荐）
 
+#### A. 使用初始化脚本（推荐）
+
+```bash
+# 1. 运行初始化脚本（自动创建目录和配置文件）
+./config/docker-init.sh
+
+# 2. 编辑配置文件，填入币安 API 密钥
+vi /Users/jiangwei/Documents/docker/monitor/.env
+
+# 3. 启动服务
+cd config
+docker-compose up --build -d
+
+# 4. 查看状态
+docker-compose ps
+
+# 5. 查看日志
+docker-compose logs -f
+```
+
+#### B. 手动部署
+
 ```bash
 # 1. 确保宿主机目录存在
 mkdir -p /Users/jiangwei/Documents/docker/monitor/{data,logs,config}
 
-# 2. 构建并启动
-cd monitor
+# 2. 复制并编辑配置文件
+cp config/.env.example /Users/jiangwei/Documents/docker/monitor/.env
+# 编辑 .env 填入币安 API 密钥
+
+# 3. 启动服务
+cd config
 docker-compose up --build -d
+```
 
-# 3. 查看日志
-docker logs -f cryptoradar-backend
+#### 访问应用
 
-# 4. 访问应用
-# 前端：http://localhost:5174
-# 后端 API：http://localhost:8000
-# API 文档：http://localhost:8000/docs
+- 前端地址：http://localhost:5174（或配置的 `FRONTEND_PORT`）
+- 后端 API：http://localhost:8000（或配置的 `BACKEND_PORT`）
+- API 文档：http://localhost:8000/docs
 
-# 5. 停止服务
+#### 停止服务
+
+```bash
 docker-compose down
 ```
+
+#### 自定义端口
+
+编辑 `/Users/jiangwei/Documents/docker/monitor/.env`：
+```bash
+BACKEND_PORT=9000      # 后端端口
+FRONTEND_PORT=5176     # 前端端口
+```
+
+#### 数据持久化
 
 所有数据持久化到宿主机目录 `/Users/jiangwei/Documents/docker/monitor/`：
 - `data/radar.db` - SQLite 数据库
 - `logs/backend.log` - 应用日志
-- `config/` - 配置文件导入/导出
-- `.env` - 环境变量
+- `.env` - 环境变量配置文件
+
+详细 Docker 部署说明请参考 [config/README.Docker.md](config/README.Docker.md)
+
+---
 
 ### 方式二：本地开发环境
 
-### 准备工作
+#### 准备工作
 请确保已安装 Python 3.10+ 和 Node.js 18+。
 
-### 步骤 1：后端环境配置
-```bash
-# 进入项目目录
-cd monitor
+#### 步骤 1：创建配置文件
 
+```bash
+# 复制配置文件模板
+cp .env.example .env
+
+# 编辑 .env 填入币安 API 密钥
+vi .env
+```
+
+#### 步骤 2：后端环境配置
+
+```bash
 # 创建并激活虚拟环境
 python -m venv venv
 source venv/bin/activate  # macOS/Linux
 
 # 安装依赖
 pip install -r requirements.txt
+
+# 启动后端（使用 scripts/start.sh 或直接运行）
+./scripts/start.sh
+# 或
+python main.py
 ```
 
-### 步骤 2：前端环境配置
+#### 步骤 3：前端环境配置
+
 ```bash
 cd web_ui
 npm install
 npm run dev
 ```
 
-### 步骤 3：启动系统
+#### 访问应用
+
+- 前端地址：http://localhost:5173（或配置的 `FRONTEND_PORT`）
+- 后端 API：http://localhost:8000（或配置的 `BACKEND_PORT`）
+- API 文档：http://localhost:8000/docs
+
+#### 使用启动/停止脚本
+
 ```bash
-# 运行主程序
-python main.py
+# 启动系统
+./scripts/start.sh
+
+# 停止系统
+./scripts/stop.sh
 ```
 
 ---
 
 ## 项目结构
+
 ```text
 monitor/
-├── core/               # 领域实体与模型 (Entities)
-├── domain/             # 业务逻辑与策略引擎 (Strategy, Risk)
-├── infrastructure/     # 基础设施层 (API Client, DB Repo, Notify)
-├── web/                # 后端路由与 Web 接口 (API Endpoints)
-├── web_ui/             # 前端 React 项目
-├── scripts/            # 维护脚本与回测测试
-└── docs/               # 系统设计文档与 API 契约
+├── .env.example              # 环境变量配置模板
+├── .env                      # 环境变量配置（本地开发）
+├── scripts/
+│   ├── start.sh              # 启动脚本
+│   ├── stop.sh               # 停止脚本
+│   └── migrate_secrets.py    # 数据库迁移脚本
+├── config/
+│   ├── .env.example          # Docker 配置模板
+│   ├── docker-compose.yaml   # Docker 编排配置
+│   ├── Dockerfile.backend    # 后端 Docker 镜像
+│   ├── Dockerfile.frontend   # 前端 Docker 镜像
+│   ├── nginx.conf            # Nginx 配置
+│   ├── docker-init.sh        # Docker 初始化脚本
+│   └── README.Docker.md      # Docker 部署指南
+├── core/                     # 领域实体与模型 (Entities)
+├── domain/                   # 业务逻辑与策略引擎 (Strategy, Risk)
+├── infrastructure/           # 基础设施层 (API Client, DB Repo, Notify)
+│   └── config/
+│       └── env_loader.py     # 环境变量加载模块
+├── application/              # 应用层（引擎、服务）
+├── web/                      # 后端路由与 Web 接口 (API Endpoints)
+├── web_ui/                   # 前端 React 项目
+└── docs/                     # 系统设计文档与 API 契约
 ```
+
+---
+
+## 配置说明
+
+### 私密配置（从 .env 文件读取）
+
+以下配置从项目根目录的 `.env` 文件（本地开发）或 `/Users/jiangwei/Documents/docker/monitor/.env`（Docker 部署）读取：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `BINANCE_API_KEY` | 币安 API Key（必填） | - |
+| `BINANCE_API_SECRET` | 币安 API Secret（必填） | - |
+| `GLOBAL_PUSH_ENABLED` | 全局推送开关 | true |
+| `FEISHU_ENABLED` | 飞书推送开关 | false |
+| `FEISHU_WEBHOOK_URL` | 飞书 Webhook 地址 | - |
+| `WECOM_ENABLED` | 企业微信推送开关 | false |
+| `WECOM_WEBHOOK_URL` | 企业微信 Webhook 地址 | - |
+| `BACKEND_PORT` | 后端端口 | 8000 |
+| `FRONTEND_PORT` | 前端端口 | 5173 |
+
+### 可界面配置项
+
+以下配置可通过前端设置页面修改：
+
+- 监控币种列表
+- 监控周期（15m/1h/4h/1d）
+- Pinbar 形态参数
+- 风控参数（杠杆、止损距离）
+- 评分权重配置
 
 ---
 
 ## Docker 部署
 
-详细 Docker 部署说明请参考 [DOCKER.md](DOCKER.md)
+详细 Docker 部署说明请参考 [config/README.Docker.md](config/README.Docker.md)
 
 ### 配置导入/导出
 

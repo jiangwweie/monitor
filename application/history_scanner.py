@@ -134,7 +134,7 @@ class HistoryScanner:
             # ============================
             weights: ScoringWeights = self.engine.weights
             pinbar_config: PinbarConfig = self.engine.pinbar_config
-            max_sl_dist: float = self.engine.max_sl_dist
+            max_sl_dist: float = self.engine.risk_config.max_sl_dist
             monitor_intervals: Dict[str, IntervalConfig] = self.engine.monitor_intervals
 
             # 判断是否需要 MTF 趋势校验

@@ -192,6 +192,23 @@ async def lifespan(fastapi_app: FastAPI):
         except Exception as e:
             logging.error(f"无法解析数据中的 pinbar_config 配置：{e}")
 
+    # 读取配置：风控参数
+    risk_config_json = await engine.repo.get_secret("risk_config")
+    if risk_config_json:
+        try:
+            from core.entities import RiskConfig
+
+            risk_data = json.loads(risk_config_json)
+            # 只更新已配置的字段，未配置的保持默认值
+            for key, value in risk_data.items():
+                if hasattr(engine.risk_config, key):
+                    setattr(engine.risk_config, key, value)
+            logging.info(f"风控配置已加载：risk_pct={engine.risk_config.risk_pct}, "
+                        f"max_leverage={engine.risk_config.max_leverage}, "
+                        f"max_positions={engine.risk_config.max_positions}")
+        except Exception as e:
+            logging.error(f"无法解析数据中的 risk_config 配置：{e}")
+
     # 实例化历史 K 线分片采集器与历史信号扫描引擎
     from infrastructure.feed.binance_kline_fetcher import BinanceKlineFetcher
     from application.history_scanner import HistoryScanner

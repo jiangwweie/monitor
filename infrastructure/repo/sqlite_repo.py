@@ -60,6 +60,8 @@ class SQLiteRepo(IRepository):
                     suggested_quantity REAL,
                     investment_amount REAL,
                     risk_amount REAL,
+                    actual_risk_amount REAL DEFAULT 0.0,
+                    leverage_capped INTEGER DEFAULT 0,
                     created_at INTEGER
                 )
             ''')
@@ -149,15 +151,18 @@ class SQLiteRepo(IRepository):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute('''
                 INSERT INTO position_sizings (
-                    signal_timestamp, suggested_leverage, suggested_quantity, 
-                    investment_amount, risk_amount, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    signal_timestamp, suggested_leverage, suggested_quantity,
+                    investment_amount, risk_amount, actual_risk_amount,
+                    leverage_capped, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 sizing.signal.timestamp,
                 sizing.suggested_leverage,
                 sizing.suggested_quantity,
                 sizing.investment_amount,
                 sizing.risk_amount,
+                sizing.actual_risk_amount,
+                1 if sizing.leverage_capped else 0,
                 int(time.time() * 1000)
             ))
             await db.commit()

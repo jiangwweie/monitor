@@ -706,6 +706,7 @@ class RiskConfig(BaseModel):
     risk_pct: Optional[float] = Field(None, ge=0.005, le=0.1)
     max_sl_dist: Optional[float] = Field(None, ge=0.01, le=0.1)
     max_leverage: Optional[float] = Field(None, ge=1.0, le=125.0)
+    max_position_value_ratio: Optional[float] = Field(None, ge=1.0, le=50.0)
 
 
 class ConfigUpdateReq(BaseModel):
@@ -774,18 +775,21 @@ async def get_config(request: Request):
                 "risk_pct": risk_config_data.get("risk_pct", engine.risk_config.risk_pct),
                 "max_sl_dist": risk_config_data.get("max_sl_dist", engine.risk_config.max_sl_dist),
                 "max_leverage": risk_config_data.get("max_leverage", engine.risk_config.max_leverage),
+                "max_position_value_ratio": risk_config_data.get("max_position_value_ratio", engine.risk_config.max_position_value_ratio),
             }
         except json.JSONDecodeError:
             risk_config = {
                 "risk_pct": engine.risk_config.risk_pct,
                 "max_sl_dist": engine.risk_config.max_sl_dist,
                 "max_leverage": engine.risk_config.max_leverage,
+                "max_position_value_ratio": engine.risk_config.max_position_value_ratio,
             }
     else:
         risk_config = {
             "risk_pct": engine.risk_config.risk_pct,
             "max_sl_dist": engine.risk_config.max_sl_dist,
             "max_leverage": engine.risk_config.max_leverage,
+            "max_position_value_ratio": engine.risk_config.max_position_value_ratio,
         }
 
     # 从数据库读取评分权重配置
@@ -1060,6 +1064,7 @@ class RiskConfigReq(BaseModel):
     risk_pct: Optional[float] = Field(None, ge=0.005, le=0.1)
     max_sl_dist: Optional[float] = Field(None, ge=0.01, le=0.1)
     max_leverage: Optional[float] = Field(None, ge=1.0, le=125.0)
+    max_position_value_ratio: Optional[float] = Field(None, ge=1.0, le=50.0)
 
 
 @app.put("/api/config/risk")
@@ -1081,6 +1086,8 @@ async def update_risk_config(request: Request, req: RiskConfigReq):
         engine.risk_config.max_sl_dist = update_data["max_sl_dist"]
     if "max_leverage" in update_data:
         engine.risk_config.max_leverage = update_data["max_leverage"]
+    if "max_position_value_ratio" in update_data:
+        engine.risk_config.max_position_value_ratio = update_data["max_position_value_ratio"]
 
     try:
         data = await config_service.update_risk_config(update_data)

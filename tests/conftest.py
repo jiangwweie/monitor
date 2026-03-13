@@ -24,7 +24,8 @@ def default_risk_config():
         risk_pct=0.02,          # 2% 单笔风险
         max_sl_dist=0.035,      # 3.5% 最大止损
         max_leverage=20.0,      # 20x 最大杠杆
-        max_positions=4         # 最多 4 个持仓
+        max_positions=4,        # 最多 4 个持仓
+        max_position_value_ratio=20.0  # 仓位价值比例上限 20 倍
     )
 
 

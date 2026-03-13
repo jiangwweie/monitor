@@ -154,6 +154,7 @@ class ConfigService:
                     "risk_pct": risk_config_data.get("risk_pct", 0.02),
                     "max_sl_dist": risk_config_data.get("max_sl_dist", 0.035),
                     "max_leverage": risk_config_data.get("max_leverage", 20.0),
+                    "max_position_value_ratio": risk_config_data.get("max_position_value_ratio", 20.0),
                 }
             except json.JSONDecodeError:
                 pass
@@ -164,12 +165,14 @@ class ConfigService:
                 "risk_pct": engine_risk_config.risk_pct,
                 "max_sl_dist": engine_risk_config.max_sl_dist,
                 "max_leverage": engine_risk_config.max_leverage,
+                "max_position_value_ratio": getattr(engine_risk_config, 'max_position_value_ratio', 20.0),
             }
 
         return {
             "risk_pct": 0.02,
             "max_sl_dist": 0.035,
             "max_leverage": 20.0,
+            "max_position_value_ratio": 20.0,
         }
 
     async def get_scoring_config(self) -> Dict[str, Any]:
@@ -619,6 +622,12 @@ class ConfigService:
                 if not (1 <= max_leverage <= 125):
                     raise ConfigValidationError(
                         f"风险配置：max_leverage 必须在 1-125 范围内，当前为 {max_leverage}"
+                    )
+            if "max_position_value_ratio" in risk_config:
+                max_position_value_ratio = float(risk_config["max_position_value_ratio"])
+                if not (1 <= max_position_value_ratio <= 50):
+                    raise ConfigValidationError(
+                        f"风险配置：max_position_value_ratio 必须在 1-50 范围内，当前为 {max_position_value_ratio}"
                     )
 
         # === 4. 校验 Pinbar 参数范围 ===

@@ -8,7 +8,8 @@ from core.entities import Signal, AccountBalance, PositionSizing, RiskConfig
 from core.exceptions import RiskLimitExceeded
 
 # 常量：仓位价值比例上限（名义价值不超过账户总额的倍数）
-MAX_POSITION_VALUE_RATIO = Decimal("3.0")
+# 已迁移至 RiskConfig.max_position_value_ratio，此常量保留作为向后兼容的 fallback
+DEFAULT_MAX_POSITION_VALUE_RATIO = Decimal("20.0")
 
 
 class PositionSizer:
@@ -111,16 +112,18 @@ class PositionSizer:
         # 计算理论应开名义价值 (Notional Value) = 单笔风险金额 / 止损距离比例
         notional_value = original_risk_amount / sl_distance_pct
 
-        # 仓位价值比例校验：名义价值不超过账户总额的 MAX_POSITION_VALUE_RATIO 倍
-        max_allowed_notional = wallet_balance * MAX_POSITION_VALUE_RATIO
+        # 仓位价值比例校验：名义价值不超过账户总额的 max_position_value_ratio 倍
+        # 从 risk_config 读取配置，如果没有则使用默认 fallback 值
+        max_position_value_ratio = Decimal(str(risk_config.max_position_value_ratio)) if hasattr(risk_config, 'max_position_value_ratio') and risk_config.max_position_value_ratio else DEFAULT_MAX_POSITION_VALUE_RATIO
+        max_allowed_notional = wallet_balance * max_position_value_ratio
         if notional_value > max_allowed_notional:
             raise RiskLimitExceeded(
-                f"仓位价值比例超限：名义价值 ({float(notional_value):.2f}) 超过账户总额 ({float(wallet_balance):.2f}) 的 {float(MAX_POSITION_VALUE_RATIO)} 倍",
+                f"仓位价值比例超限：名义价值 ({float(notional_value):.2f}) 超过账户总额 ({float(wallet_balance):.2f}) 的 {float(max_position_value_ratio)} 倍",
                 error_code="POSITION_VALUE_RATIO_EXCEEDED",
                 context={
                     "notional_value": float(notional_value),
                     "wallet_balance": float(wallet_balance),
-                    "max_allowed_ratio": float(MAX_POSITION_VALUE_RATIO)
+                    "max_allowed_ratio": float(max_position_value_ratio)
                 }
             )
 

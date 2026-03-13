@@ -25,6 +25,7 @@ interface SettingsProps {
     risk_pct: number;
     max_sl_dist: number;
     max_leverage: number;
+    max_position_value_ratio: number;
     w_shape: number;
     w_trend: number;
     w_vol: number;

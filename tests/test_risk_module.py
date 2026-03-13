@@ -6,7 +6,7 @@ import pytest
 from decimal import Decimal
 from core.entities import Signal, AccountBalance, Position, RiskConfig
 from core.exceptions import RiskLimitExceeded
-from domain.risk.sizer import PositionSizer, MAX_POSITION_VALUE_RATIO
+from domain.risk.sizer import PositionSizer, DEFAULT_MAX_POSITION_VALUE_RATIO
 from domain.risk.portfolio_risk import PortfolioRiskService, PortfolioRiskMetrics
 
 
@@ -289,23 +289,80 @@ class TestP2_PositionLimit:
 class TestP2_PositionValueRatio:
     """P2-问题 5: 仓位价值比例校验验证"""
 
-    def test_position_value_ratio_limit(self, risk_sizer, default_account, tight_stop_signal, default_risk_config):
-        """验证仓位价值不超过账户总额的 3 倍"""
-        # tight_stop_signal 止损距离 0.5%，名义价值 = 200/0.005 = 40000 (4 倍账户总额)
-        # 应触发 3 倍上限拦截
+    def test_position_value_ratio_limit(self, risk_sizer, default_account, default_risk_config):
+        """验证仓位价值不超过账户总额的 20 倍（默认值）"""
+        # 创建一个极小止损距离的信号，强制触发仓位价值比例拦截
+        # sl_distance_pct = 0.0005 (0.05%)
+        # notional_value = (10000 * 0.02) / 0.0005 = 400,000 (40 倍账户总额)
+        # 应该触发 20 倍上限拦截
+        extreme_signal = Signal(
+            symbol="BTCUSDT",
+            interval="1m",
+            direction="LONG",
+            entry_price=50000.0,
+            stop_loss=49975.0,  # 0.05% 止损
+            take_profit_1=50100.0,
+            timestamp=1709900000000,
+            reason="极小止损信号",
+            sl_distance_pct=0.0005,  # 0.05% 止损距离
+            score=80,
+            quality_tier="A"
+        )
 
         with pytest.raises(RiskLimitExceeded) as exc_info:
             risk_sizer.calculate(
-                signal=tight_stop_signal,
+                signal=extreme_signal,
                 account=default_account,
                 risk_config=default_risk_config
             )
 
         assert "仓位价值" in str(exc_info.value) or "POSITION_VALUE" in str(exc_info.value.error_code)
 
-    def test_max_position_value_ratio_constant(self):
-        """验证 MAX_POSITION_VALUE_RATIO 常数为 3.0"""
-        assert MAX_POSITION_VALUE_RATIO == Decimal("3.0")
+    def test_max_position_value_ratio_default(self):
+        """验证 DEFAULT_MAX_POSITION_VALUE_RATIO 默认值为 20.0"""
+        assert DEFAULT_MAX_POSITION_VALUE_RATIO == Decimal("20.0")
+
+    def test_position_value_ratio_from_config(self, risk_sizer, default_account, default_risk_config):
+        """验证 max_position_value_ratio 从 RiskConfig 读取"""
+        # 创建一个极小止损距离的信号
+        extreme_signal = Signal(
+            symbol="BTCUSDT",
+            interval="1m",
+            direction="LONG",
+            entry_price=50000.0,
+            stop_loss=49975.0,  # 0.05% 止损
+            take_profit_1=50100.0,
+            timestamp=1709900000000,
+            reason="极小止损信号",
+            sl_distance_pct=0.0005,  # 0.05% 止损距离
+            score=80,
+            quality_tier="A"
+        )
+
+        # 使用默认配置（20 倍）应该被拦截
+        with pytest.raises(RiskLimitExceeded):
+            risk_sizer.calculate(
+                signal=extreme_signal,
+                account=default_account,
+                risk_config=default_risk_config
+            )
+
+        # 创建一个自定义比率的配置（设置为 50 倍，允许更宽松）
+        custom_ratio_config = RiskConfig(
+            risk_pct=0.02,
+            max_sl_dist=0.035,
+            max_leverage=20.0,
+            max_positions=4,
+            max_position_value_ratio=50.0  # 更宽松的比率
+        )
+
+        # 50 倍配置应该允许 40 倍名义价值通过
+        sizing = risk_sizer.calculate(
+            signal=extreme_signal,
+            account=default_account,
+            risk_config=custom_ratio_config
+        )
+        assert sizing is not None
 
 
 class TestP3_DecimalPrecision:

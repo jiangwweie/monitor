@@ -68,7 +68,8 @@ class CryptoRadarEngine:
             risk_pct=0.02,
             max_sl_dist=0.035,
             max_leverage=20.0,
-            max_positions=4
+            max_positions=4,
+            max_position_value_ratio=20.0
         )
         self.weights = ScoringWeights(w_shape=0.4, w_trend=0.4, w_vol=0.2)
         from core.entities import PinbarConfig
@@ -367,11 +368,25 @@ class CryptoRadarEngine:
         quality_tier = getattr(signal, 'quality_tier', 'B')
         tier_icon = "🌟" if quality_tier == 'A' else "📊" if quality_tier == 'B' else "📝"
 
+        # TradingView 链接
+        tv_link = f"https://www.tradingview.com/chart/?symbol={signal.symbol.upper()}"
+
+        # 盈亏比预估
+        rr_ratio = 1.5
+        if abs(signal.stop_loss - signal.entry_price) > 0:
+            rr_ratio = abs(signal.take_profit_1 - signal.entry_price) / abs(signal.stop_loss - signal.entry_price)
+
+        # 均线偏离度（如果有）
+        bias_info = ""
+        if hasattr(signal, 'ema_distance') and signal.ema_distance > 0:
+            bias_info = f"\n偏离均线：`{signal.ema_distance}%`"
+
         return (
             f"**{tier_icon} {signal.reason} · {display_score}分**\n"
+            f"[📈 查看 TradingView 图表]({tv_link})\n"
             f"#{signal.symbol.upper()} | {signal.interval} | {direction_emoji}\n"
             f"入场：`{signal.entry_price}`\n"
             f"止损：`{signal.stop_loss}`\n"
-            f"目标：`{signal.take_profit_1}`\n"
-            f"杠杆：`{sizing.suggested_leverage:.1f}x`"
+            f"目标：`{signal.take_profit_1}` (盈亏比 1:{rr_ratio:.2f}){bias_info}\n"
+            f"建议杠杆：`{sizing.suggested_leverage:.1f}x`"
         )

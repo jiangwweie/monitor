@@ -19,6 +19,7 @@ export function RiskTab({ initialConfig, onConfigChange }: RiskTabProps) {
     risk_pct: 2.0,
     max_sl_dist: 3.5,
     max_leverage: 20,
+    max_position_value_ratio: 20,
     w_shape: 50,
     w_trend: 30,
     w_vol: 20,
@@ -29,6 +30,7 @@ export function RiskTab({ initialConfig, onConfigChange }: RiskTabProps) {
       risk_pct: initialConfig.risk_pct ?? 2.0,
       max_sl_dist: initialConfig.max_sl_dist ?? 3.5,
       max_leverage: initialConfig.max_leverage ?? 20,
+      max_position_value_ratio: initialConfig.max_position_value_ratio ?? 20,
       w_shape: initialConfig.w_shape ?? 50,
       w_trend: initialConfig.w_trend ?? 30,
       w_vol: initialConfig.w_vol ?? 20,
@@ -46,6 +48,7 @@ export function RiskTab({ initialConfig, onConfigChange }: RiskTabProps) {
           risk_pct: Math.round(Number(formData.risk_pct) * 100) / 10000.0,
           max_sl_dist: Math.round(Number(formData.max_sl_dist) * 100) / 10000.0,
           max_leverage: Number(formData.max_leverage),
+          max_position_value_ratio: Number(formData.max_position_value_ratio),
         }),
       });
 
@@ -68,6 +71,7 @@ export function RiskTab({ initialConfig, onConfigChange }: RiskTabProps) {
         onConfigChange("risk_pct", formData.risk_pct);
         onConfigChange("max_sl_dist", formData.max_sl_dist);
         onConfigChange("max_leverage", formData.max_leverage);
+        onConfigChange("max_position_value_ratio", formData.max_position_value_ratio);
         onConfigChange("w_shape", formData.w_shape);
         onConfigChange("w_trend", formData.w_trend);
         onConfigChange("w_vol", formData.w_vol);
@@ -130,7 +134,7 @@ export function RiskTab({ initialConfig, onConfigChange }: RiskTabProps) {
           <CardTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
             <ShieldCheck className="w-5 h-5" /> 风控参数
           </CardTitle>
-          <CardDescription>配置单笔风险、止损距离和最大杠杆</CardDescription>
+          <CardDescription>配置单笔风险、止损距离、最大杠杆和仓位价值比例</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
@@ -162,7 +166,7 @@ export function RiskTab({ initialConfig, onConfigChange }: RiskTabProps) {
                 className="bg-white dark:bg-black/20 border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white font-mono"
               />
             </div>
-            <div className="space-y-2 col-span-2">
+            <div className="space-y-2">
               <Label className="text-zinc-700 dark:text-zinc-300">
                 最大杠杆倍数 (x)
               </Label>
@@ -171,6 +175,19 @@ export function RiskTab({ initialConfig, onConfigChange }: RiskTabProps) {
                 value={formData.max_leverage}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, max_leverage: Number(e.target.value) }))
+                }
+                className="bg-white dark:bg-black/20 border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-700 dark:text-zinc-300">
+                仓位价值比例上限 (倍)
+              </Label>
+              <Input
+                type="number"
+                value={formData.max_position_value_ratio}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, max_position_value_ratio: Number(e.target.value) }))
                 }
                 className="bg-white dark:bg-black/20 border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white"
               />

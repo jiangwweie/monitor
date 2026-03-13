@@ -343,9 +343,17 @@ class HistoryScanner:
                 ts_str = datetime.fromtimestamp(sig.timestamp / 1000).strftime('%m-%d %H:%M')
                 direction_emoji = "🟢" if sig.direction == "LONG" else "🔴"
                 score_display = round(sig.score / 10, 1)
+                # 添加额外信息：偏离度
+                bias_info = ""
+                if hasattr(sig, 'ema_distance') and sig.ema_distance > 0:
+                    bias_info = f"偏离 `{sig.ema_distance}%`"
+                
+                # TradingView 链接
+                tv_link = f"https://www.tradingview.com/chart/?symbol={sig.symbol.upper()}"
+
                 details_lines.append(
-                    f"  {i+1}. {ts_str} {direction_emoji} {sig.direction} "
-                    f"入场 `{sig.entry_price}` 评分 `{score_display}/10`"
+                    f"  {i+1}. [📈 图表]({tv_link}) {ts_str} {direction_emoji} {sig.direction} "
+                    f"入场 `{sig.entry_price}` 评分 `{score_display}/10` {bias_info}"
                 )
 
             if len(signals) > 10:

@@ -144,10 +144,11 @@ class RiskConfig:
     """风控配置实体
     处理 K 线前进行热加载的风控参数。
     """
-    risk_pct: float           # 单笔最大风险百分比，例如 0.02 (2%)
-    max_sl_dist: float        # 天地针熔断最大止损距离，例如 0.035 (3.5%)
-    max_leverage: float       # 杠杆熔断上限，例如 20.0
-    max_positions: int = 4    # 最大持仓数量上限，默认 4 笔
+    risk_pct: float                      # 单笔最大风险百分比，例如 0.02 (2%)
+    max_sl_dist: float                   # 天地针熔断最大止损距离，例如 0.035 (3.5%)
+    max_leverage: float                  # 杠杆熔断上限，例如 20.0
+    max_positions: int = 4               # 最大持仓数量上限，默认 4 笔
+    max_position_value_ratio: float = 20.0  # 仓位价值比例上限（名义价值/账户余额），默认 20 倍
 
 class AutoOrderStatus(str, Enum):
     """自动下单开关枚举 (严禁编辑且必须置灰显示)"""
